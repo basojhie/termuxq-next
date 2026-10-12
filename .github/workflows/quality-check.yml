@@ -1,0 +1,69 @@
+name: TermuxQ Quality Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Validate browser app and Termux scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate inline JavaScript syntax
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          html = Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", html, flags=re.I)
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in index.html")
+          Path("/tmp/termuxq-inline.js").write_text("\\n".join(scripts), encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline script block(s)")
+          PY
+          node --check /tmp/termuxq-inline.js
+
+      - name: Validate shell script syntax
+        run: |
+          bash -n update_termuxq.sh
+          bash -n start_termuxq_live.sh
+
+      - name: Validate PWA manifest and required assets
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".")
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          required = ["index.html", "manifest.json", "sw.js", "termuxq_agent.py",
+                      "update_termuxq.sh", "start_termuxq_live.sh",
+                      "icon-192.png", "icon-512.png", "icon-maskable-512.png",
+                      "apple-touch-icon.png"]
+          missing = [name for name in required if not (root / name).is_file()]
+          if missing:
+              raise SystemExit("Missing required files: " + ", ".join(missing))
+          for item in manifest.get("icons", []):
+              if not (root / item["src"]).is_file():
+                  raise SystemExit("Manifest icon not found: " + item["src"])
+          sw = (root / "sw.js").read_text(encoding="utf-8")
+          for name in ["icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]:
+              if "./" + name not in sw:
+                  raise SystemExit("Service worker does not cache " + name)
+          print("Manifest JSON and PWA asset paths are valid.")
+          PY

@@ -18,6 +18,9 @@ const { chromium } = require('playwright');
   try {
     await page.goto(process.env.TERMUXQ_URL || 'http://127.0.0.1:8000', { waitUntil: 'domcontentloaded' });
     await page.locator('#mod-count').waitFor();
+    assert.equal(await page.locator('#mode-banner').count(), 1, 'compact browser-mode banner should appear');
+    assert.match(await page.locator('#mode-banner').innerText(), /Browser Mode.*Agent dibutuhkan untuk metrik perangkat dan ping LAN/);
+    assert.doesNotMatch(await page.locator('#mode-banner').innerText(), /Modul yang bisa berjalan di browser/);
     assert.equal(await page.locator('#tq-metric-history').count(), 1, 'resource history panel should appear');
 
     // Subnet calculator: common /24 sample and validation.

@@ -43,3 +43,9 @@ Tool yang dibuat dengan JavaScript/Web Crypto berjalan langsung di browser. Stat
 - **IPv4 Subnet Calculator** menghitung Network ID, Broadcast, subnet mask, wildcard, jumlah alamat, dan rentang host CIDR secara lokal.
 - **IT Support Ticket Log** menyimpan tiket troubleshooting lokal, mengubah status, mencari/menyaring tiket, serta mengimpor/mengekspor JSON untuk cadangan manual.
 - Dashboard dimulai dengan placeholder, bukan angka CPU/RAM/latensi statis. Nilai aktual dilabeli sesuai sumber data.
+
+
+## Modul yang ditambahkan
+- **HTTP / SSL Inspector** mencoba permintaan HEAD dari browser. Jika CORS mengizinkan, ia menunjukkan status, waktu respons, dan header yang terlihat. Browser tidak membuka detail sertifikat lengkap, dan header yang tersembunyi oleh CORS tidak boleh dianggap tidak ada.
+- **Project Health Check** menguji Web Crypto, penyimpanan lokal, dukungan/registrasi service worker, handler modul, serta file manifest/icon yang diperlukan.
+- **Pembaruan Termux**: unduh script update_termuxq.sh dari repo ini lalu jalankan. Script membuat cadangan sebelum pembaruan repo, menolak perubahan lokal yang belum disimpan, dan menggunakan fast-forward saja.

@@ -3,7 +3,9 @@
 Hanya mengirim statistik perangkat (JSON). Tidak menjalankan perintah dari web.
 Jalankan:  python termuxq_agent.py   (Ctrl+C untuk berhenti)
 Opsional:  pip install psutil  (CPU/RAM/baterai lebih akurat di Windows/Linux)"""
-import json, os, platform, shutil, socket, subprocess, time
+import ipaddress, json, os, platform, re, shutil, socket, subprocess, threading, time
+from collections import deque
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 try:
     import psutil
@@ -12,6 +14,12 @@ except ImportError:
 
 PORT = int(os.environ.get("TQ_PORT", "8765"))
 ORIGINS = {"https://basojhie.github.io", "http://localhost:8000", "http://127.0.0.1:8000"}
+
+# Ping hanya ditujukan ke subnet privat RFC1918. Tidak menerima hostname/IP publik.
+_PRIVATE_NETS = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+_PING_CALLS = deque()
+_PING_LOCK = threading.Lock()
+_MAX_PINGS_PER_MINUTE = 60
 
 def cpu():
     try:
@@ -65,7 +73,66 @@ def uptime():
         return int(float(open("/proc/uptime").read().split()[0]))
     except Exception: return None
 
+def ping_host(value):
+    """Ping satu alamat IPv4 privat dengan argumen tetap (tanpa shell)."""
+    try:
+        target = ipaddress.ip_address(value)
+    except ValueError:
+        return 400, {"error": "Masukkan alamat IPv4 yang valid."}
+    if not isinstance(target, ipaddress.IPv4Address) or not any(target in net for net in _PRIVATE_NETS):
+        return 400, {"error": "Target dibatasi ke IPv4 privat RFC1918 (10/8, 172.16/12, 192.168/16)."}
+
+    executable = shutil.which("ping")
+    if not executable:
+        return 501, {"error": "Perintah ping tidak tersedia pada perangkat ini."}
+
+    now = time.monotonic()
+    with _PING_LOCK:
+        while _PING_CALLS and now - _PING_CALLS[0] >= 60:
+            _PING_CALLS.popleft()
+        if len(_PING_CALLS) >= _MAX_PINGS_PER_MINUTE:
+            return 429, {"error": "Batas 60 pemeriksaan ping per menit tercapai. Coba lagi sebentar."}
+        _PING_CALLS.append(now)
+
+    if os.name == "nt":
+        command = [executable, "-n", "1", "-w", "800", str(target)]
+    elif platform.system() == "Darwin":
+        command = [executable, "-c", "1", "-W", "1000", str(target)]
+    else:
+        command = [executable, "-c", "1", "-W", "1", str(target)]
+
+    started = time.monotonic()
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=2.5, check=False)
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        output = (completed.stdout or "") + "\n" + (completed.stderr or "")
+    except subprocess.TimeoutExpired:
+        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
+        return 200, {"host": str(target), "reachable": False, "latency_ms": None,
+                     "elapsed_ms": elapsed_ms, "message": "Ping melewati batas waktu."}
+    except OSError:
+        return 501, {"error": "Ping tidak dapat dijalankan pada perangkat ini."}
+
+    unreachable = re.search(r"destination host unreachable|request timed out|request timeout|100% packet loss", output, re.I)
+    reachable = completed.returncode == 0 and not unreachable
+    match = re.search(r"time[=<]\s*([\d.,]+)\s*ms", output, re.I)
+    latency_ms = float(match.group(1).replace(",", ".")) if match else None
+    return 200, {"host": str(target), "reachable": reachable, "latency_ms": latency_ms,
+                 "elapsed_ms": elapsed_ms,
+                 "message": "Respons ping diterima." if reachable else "Tidak ada balasan ping."}
+
+
 class H(BaseHTTPRequestHandler):
+    def _json(self, status, payload):
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self._cors()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _cors(self):
         o = self.headers.get("Origin")
         if o in ORIGINS:
@@ -78,14 +145,20 @@ class H(BaseHTTPRequestHandler):
         self.send_response(204); self._cors()
         self.send_header("Access-Control-Allow-Methods", "GET"); self.send_header("Access-Control-Allow-Headers", "*"); self.end_headers()
     def do_GET(self):
-        if not self._ok_host() or self.path.split("?")[0] != "/stats":
+        if not self._ok_host():
             self.send_response(404); self.end_headers(); return
-        body = json.dumps({"host": socket.gethostname(), "os": platform.system() + " " + platform.release(),
-            "cores": os.cpu_count(), "cpu_pct": cpu(), "mem": mem(), "disk": disk(), "battery": battery(),
-            "ip": local_ip(), "uptime": uptime()}).encode()
-        self.send_response(200); self._cors()
-        self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(body)
+        route = urlsplit(self.path)
+        if route.path == "/stats":
+            self._json(200, {"host": socket.gethostname(), "os": platform.system() + " " + platform.release(),
+                "cores": os.cpu_count(), "cpu_pct": cpu(), "mem": mem(), "disk": disk(), "battery": battery(),
+                "ip": local_ip(), "uptime": uptime()})
+            return
+        if route.path == "/ping":
+            target = parse_qs(route.query).get("host", [""])[0].strip()
+            status, payload = ping_host(target)
+            self._json(status, payload)
+            return
+        self.send_response(404); self.end_headers()
     def log_message(self, *a): pass
 
 if __name__ == "__main__":

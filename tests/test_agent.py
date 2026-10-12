@@ -2,6 +2,7 @@ import http.client
 import json
 import threading
 import unittest
+from unittest import mock
 
 import termuxq_agent as agent
 
@@ -50,6 +51,33 @@ class AgentHttpTests(unittest.TestCase):
         status, headers, _ = self.request(origin="https://not-allowed.example")
         self.assertEqual(status, 200)
         self.assertNotIn("Access-Control-Allow-Origin", headers)
+
+    def test_ping_rejects_public_targets_without_running_command(self):
+        with mock.patch.object(agent.subprocess, "run") as run:
+            status, _, body = self.request(path="/ping?host=8.8.8.8")
+        self.assertEqual(status, 400)
+        self.assertIn("RFC1918", json.loads(body)["error"])
+        run.assert_not_called()
+
+    def test_ping_uses_fixed_argv_for_private_ipv4(self):
+        result = mock.Mock(returncode=0, stdout="Reply from 192.168.1.10: bytes=32 time=2ms TTL=128", stderr="")
+        with mock.patch.object(agent.shutil, "which", return_value="/usr/bin/ping"), mock.patch.object(agent.subprocess, "run", return_value=result) as run:
+            status, headers, body = self.request(path="/ping?host=192.168.1.10", origin="https://basojhie.github.io")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+        data = json.loads(body)
+        self.assertTrue(data["reachable"])
+        self.assertEqual(data["latency_ms"], 2.0)
+        args, kwargs = run.call_args
+        self.assertEqual(args[0][-1], "192.168.1.10")
+        self.assertNotIn("shell", kwargs)
+        self.assertLessEqual(kwargs["timeout"], 2.5)
+
+    def test_ping_rejects_malformed_target(self):
+        with mock.patch.object(agent.subprocess, "run") as run:
+            status, _, body = self.request(path="/ping?host=localhost")
+        self.assertEqual(status, 400)
+        run.assert_not_called()
 
     def test_unknown_route_does_not_expose_stats_or_commands(self):
         status, _, _ = self.request(path="/exec?cmd=whoami")

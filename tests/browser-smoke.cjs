@@ -26,6 +26,13 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#subnet-out').innerText(), /oktet IPv4/i);
     await page.locator('#modal-close').click();
 
+    // LAN monitor validates target scope in the browser before contacting the agent.
+    await page.locator('[data-module="lan"]').click();
+    await page.locator('#modal-app #lan-hosts').fill('8.8.8.8');
+    await page.locator('#modal-app #lan-scan').click();
+    assert.match(await page.locator('#modal-app #lan-summary').innerText(), /RFC1918/);
+    await page.locator('#modal-close').click();
+
     // Ticket form: create, update status, export.
     await page.locator('[data-module="tickets"]').click();
     await page.locator('#modal-app #title').fill('Printer offline smoke test');
@@ -67,7 +74,7 @@ const { chromium } = require('playwright');
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource-history panel, subnet calculator, ticket CRUD/status/export, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

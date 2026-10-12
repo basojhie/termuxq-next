@@ -56,3 +56,11 @@ Saat Python Agent terhubung, dashboard menyimpan satu sampel CPU/RAM/storage/bat
 
 ## Quality checks
 GitHub Actions menjalankan pemeriksaan sintaks, uji API agent baca-saja, dan uji interaksi browser untuk subnet calculator, ticket log, hash checker, HTTP Inspector, serta Project Health Check.
+
+
+## LAN Device Monitor (fitur terbaru)
+Modul **LAN Device Monitor** memakai Python Agent lokal untuk mengirim satu ping ICMP ke masing-masing host IPv4 privat yang dimasukkan secara manual. Masukkan alamat satu per baris, kemudian pilih **Ping semua**. Daftar disimpan di localStorage browser ini, tidak dikirim ke backend pusat.
+
+Perlindungan agent: target dibatasi ke subnet privat RFC1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), maksimal 24 target per batch dari UI dan 60 panggilan ping per menit pada agent. Validasi berlaku di browser dan agent; proses ping menggunakan argumen terpisah tanpa shell dan timeout pendek. Tidak ada pemindaian port atau eksekusi perintah bebas. Gunakan hanya pada jaringan dan perangkat yang kamu miliki atau diizinkan untuk dikelola.
+
+Jalankan dashboard serta agent lokal dengan instruksi di atas, lalu buka **Network Tools → LAN Device Monitor**. Bila dibuka melalui GitHub Pages, browser harus mengizinkan koneksi lokal ke agent dan agent harus berjalan pada perangkat yang sama dengan browser.

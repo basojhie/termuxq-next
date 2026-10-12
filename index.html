@@ -103,7 +103,8 @@ const modules=[
 ];
 modules.push(
  {id:'subnet',cat:'network',icon:'▦',name:'IPv4 Subnet Calculator',desc:'Hitung network, broadcast, mask, dan rentang host dari CIDR.',details:['Perhitungan IPv4 dilakukan lokal di browser.','Menerima format 192.168.1.10/24; tanpa prefix memakai /24.']},
- {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal.',details:['Data tiket disimpan di localStorage browser ini.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']}
+ {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal.',details:['Data tiket disimpan di localStorage browser ini.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
+ {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -281,6 +282,57 @@ const act=(ic,t,p)=>{const a=$('#activity');a.insertAdjacentHTML('afterbegin',`<
 const setPill=()=>{$('#agent-pill').innerHTML=AG.on?'<span class="dot"></span> Agent: terhubung':'⛓ Agent: tidak terhubung'};
 async function agentPoll(){const was=AG.on;try{AG.d=await(await fetch(AG.url+'/stats',{cache:'no-store'})).json();AG.on=true}catch{AG.d=null;AG.on=false}if(AG.on!==was){setPill();act(AG.on?'⛓':'⚠',AG.on?'Agent terhubung':'Agent terputus',AG.on?(AG.d.host||'perangkat ini'):'Menunggu agent berjalan lagi')}}
 A.agent=r=>{const g=mk(r,`<label>Halaman web tidak bisa membaca CPU, RAM, storage, dan IP lokal. Jalankan agent kecil di perangkat ini: ia hanya mendengarkan 127.0.0.1, hanya membaca, dan tidak menjalankan perintah dari web. Kode: termuxq_agent.py</label>`+AGC.map((c,i)=>`<div class=cmd><code>${esc(c)}</code><button class=btn data-k=${i}>Salin</button></div>`).join('')+`<div class=row><input id=u style=flex:1><button class=btn id=c>Hubungkan</button><button class=btn id=x>Putuskan</button></div><div class=out id=o>${AG.on?'Terhubung ke '+esc(AG.d.host||'perangkat'):'Belum terhubung.'}</div>`);g('#u').value=AG.url;r.querySelectorAll('[data-k]').forEach(b=>b.onclick=e=>copy(AGC[b.dataset.k].split('   #')[0],e.currentTarget));g('#c').onclick=async()=>{AG.url=g('#u').value.trim().replace(/\/$/,'');g('#o').textContent='Menghubungkan…';AG.want=true;await agentPoll();if(AG.on){sv('tq_agent',JSON.stringify(AG.url));g('#o').textContent='Terhubung ke '+(AG.d.host||'perangkat');refresh()}else{AG.want=false;g('#o').textContent='Gagal. Pastikan agent berjalan, URL benar, dan izinkan akses jaringan lokal bila browser menanyakannya.'}};g('#x').onclick=()=>{AG.want=AG.on=false;AG.d=null;try{localStorage.removeItem('tq_agent')}catch{}setPill();g('#o').textContent='Terputus.';refresh()}};
+A.lan=r=>{
+ const saved=ls('tq_lan_hosts_v1',[]);
+ const initial=Array.isArray(saved)?saved.join('\n'):'';
+ const g=mk(r,'<label>Masukkan IP komputer milikmu atau yang diizinkan, satu per baris (maksimal 24). Agent lokal harus terhubung; hasil hanya disimpan di browser ini.</label><textarea id="lan-hosts" rows="4" spellcheck="false" placeholder="192.168.1.1&#10;192.168.1.10"></textarea><div class="row"><button class="btn" id="lan-scan" type="button">Ping semua</button><button class="btn secondary" id="lan-save" type="button">Simpan daftar</button></div><div class="out" id="lan-summary" aria-live="polite">Tambahkan alamat IPv4 privat untuk mulai.</div><div id="lan-results"></div><label>Perlindungan: hanya jaringan privat RFC1918 (10/8, 172.16/12, 192.168/16), maksimal 24 host per pemindaian dan 60 ping per menit pada agent. Tidak ada data dikirim ke server pusat.</label>');
+ g('#lan-hosts').value=initial;
+ const parseTargets=()=>{
+  const hosts=[...new Set(g('#lan-hosts').value.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))];
+  if(!hosts.length)throw new Error('Masukkan setidaknya satu alamat IPv4 privat.');
+  if(hosts.length>24)throw new Error('Maksimal 24 alamat unik per pemeriksaan.');
+  for(const host of hosts){
+   if(!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host))throw new Error('Alamat tidak valid: '+host);
+   const oct=host.split('.').map(Number);
+   if(oct.some(n=>n<0||n>255))throw new Error('Oktet IPv4 harus antara 0 dan 255: '+host);
+   const priv=oct[0]===10||(oct[0]===172&&oct[1]>=16&&oct[1]<=31)||(oct[0]===192&&oct[1]===168);
+   if(!priv)throw new Error('Hanya IPv4 privat RFC1918 yang diizinkan (10/8, 172.16/12, 192.168/16): '+host);
+  }
+  return hosts;
+ };
+ g('#lan-save').onclick=()=>{
+  try{const hosts=parseTargets();sv('tq_lan_hosts_v1',hosts);g('#lan-summary').textContent='Daftar tersimpan: '+hosts.length+' alamat unik di browser ini.'}
+  catch(e){g('#lan-summary').textContent=e.message}
+ };
+ g('#lan-scan').onclick=async()=>{
+  let hosts;
+  try{hosts=parseTargets()}catch(e){g('#lan-summary').textContent=e.message;return}
+  sv('tq_lan_hosts_v1',hosts);
+  if(!AG.on)await agentPoll();
+  if(!AG.on){g('#lan-summary').textContent='Agent belum terhubung. Buka Device Sync (Agent), pastikan agent berjalan, lalu coba lagi.';return}
+  const button=g('#lan-scan');button.disabled=true;button.textContent='Memeriksa…';
+  g('#lan-summary').textContent='Memeriksa '+hosts.length+' host menggunakan ping ICMP. Mohon tunggu hasil.';
+  g('#lan-results').innerHTML=hosts.map(host=>'<div class="panel" style="padding:10px;margin-top:8px;box-shadow:none" data-host="'+host+'"><div class="row" style="justify-content:space-between"><strong>'+host+'</strong><span class="mini-tag" data-state>MENUNGGU</span></div><div class="small" data-detail>Belum diperiksa.</div></div>').join('');
+  let next=0,up=0,done=0;
+  const worker=async()=>{
+   while(next<hosts.length){
+    const host=hosts[next++],card=r.querySelector('[data-host="'+host+'"]'),state=card.querySelector('[data-state]'),detail=card.querySelector('[data-detail]');
+    state.textContent='MEMERIKSA';detail.textContent='Mengirim satu permintaan ping…';
+    try{
+     const response=await fetch(AG.url+'/ping?host='+encodeURIComponent(host),{cache:'no-store'});
+     const data=await response.json();
+     if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
+     if(data.reachable){up++;state.textContent='ONLINE';state.style.color='var(--ok)';detail.textContent='Respons diterima · '+(data.latency_ms===null?'latensi tidak terbaca':data.latency_ms+' ms')+' · waktu cek '+data.elapsed_ms+' ms'}
+     else{state.textContent='OFFLINE / NO REPLY';state.style.color='var(--red)';detail.textContent=(data.message||'Tidak ada balasan ping')+' · waktu cek '+data.elapsed_ms+' ms'}
+    }catch(e){state.textContent='ERROR';state.style.color='var(--yellow)';detail.textContent='Agent/browser tidak dapat menyelesaikan pemeriksaan: '+e.message}
+    done++;g('#lan-summary').textContent='Selesai '+done+'/'+hosts.length+' · terjangkau '+up+' · tidak terjangkau/error '+(done-up)+'.';
+   }
+  };
+  try{await Promise.all(Array.from({length:Math.min(4,hosts.length)},()=>worker()));act('⌖','LAN check selesai',up+' dari '+hosts.length+' host menjawab ping.')}
+  finally{button.disabled=false;button.textContent='Ping semua'}
+ }; 
+};
+
 const rows=[...document.querySelectorAll('.system-row')],nb=[...document.querySelectorAll('.network-box')],tags=[...document.querySelectorAll('#overview-panels .mini-tag')],st=[...document.querySelectorAll('.stat')],pulse=document.querySelector('.pulse');
 
 const metricHistoryKey='tq_metric_history_v1';

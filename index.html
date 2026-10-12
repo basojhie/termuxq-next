@@ -189,7 +189,7 @@ A.http=r=>{
  };
 };
 A.opsdash=r=>{
- const g=mk(r,'<div class="small">Ringkasan operasional berdasarkan data yang tersimpan pada browser ini. Status aset menggunakan pemeriksaan terakhir dan tidak menjalankan ping otomatis.</div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><span id="ops-updated" class="small">Memuat ringkasan…</span><div class="row"><button class="btn secondary" id="ops-refresh" type="button">Segarkan ringkasan</button><button class="btn" id="ops-open-tickets" type="button">Buka tiket</button><button class="btn" id="ops-open-inventory" type="button">Buka inventaris</button></div></div><div id="ops-metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:12px"></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px"><section class="panel" style="padding:12px;box-shadow:none"><strong>Tiket yang belum selesai</strong><div id="ops-ticket-list" style="margin-top:8px"></div></section><section class="panel" style="padding:12px;box-shadow:none"><strong>Aset dengan status perlu diperiksa</strong><div id="ops-asset-list" style="margin-top:8px"></div></section></div><div class="out" style="margin-top:12px">Catatan: data tiket dan inventaris masih terpisah per browser/perangkat. Sinkronisasi antar-komputer akan dibuat pada tahap berikutnya.</div>');
+ const g=mk(r,'<div class="small">Ringkasan operasional berdasarkan data yang tersimpan pada browser ini. Status aset menggunakan pemeriksaan terakhir dan tidak menjalankan ping otomatis.</div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><span id="ops-updated" class="small">Memuat ringkasan…</span><div class="row"><button class="btn secondary" id="ops-refresh" type="button">Segarkan ringkasan</button><button class="btn" id="ops-go-tickets" type="button">Buka tiket</button><button class="btn" id="ops-open-inventory" type="button">Buka inventaris</button></div></div><div id="ops-metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:12px"></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px"><section class="panel" style="padding:12px;box-shadow:none"><strong>Tiket yang belum selesai</strong><div id="ops-ticket-list" style="margin-top:8px"></div></section><section class="panel" style="padding:12px;box-shadow:none"><strong>Aset dengan status perlu diperiksa</strong><div id="ops-asset-list" style="margin-top:8px"></div></section></div><div class="out" style="margin-top:12px">Catatan: data tiket dan inventaris masih terpisah per browser/perangkat. Sinkronisasi antar-komputer akan dibuat pada tahap berikutnya.</div>');
  const readArray=key=>{const value=ls(key,[]);return Array.isArray(value)?value:[]};
  const timeText=value=>{const n=Date.parse(value||'');return Number.isFinite(n)?new Date(n).toLocaleString('id-ID'):'Waktu tidak tersedia'};
  const draw=()=>{
@@ -223,7 +223,7 @@ A.opsdash=r=>{
   g('#ops-updated').textContent='Ringkasan diperbarui: '+new Date().toLocaleString('id-ID');
  };
  g('#ops-refresh').onclick=draw;
- g('#ops-open-tickets').onclick=()=>openModule('tickets');
+ g('#ops-go-tickets').onclick=()=>openModule('tickets');
  g('#ops-open-inventory').onclick=()=>openModule('inventory');
  draw();
 };

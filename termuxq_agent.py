@@ -3,7 +3,7 @@
 Hanya mengirim statistik perangkat (JSON). Tidak menjalankan perintah dari web.
 Jalankan:  python termuxq_agent.py   (Ctrl+C untuk berhenti)
 Opsional:  pip install psutil  (CPU/RAM/baterai lebih akurat di Windows/Linux)"""
-import ipaddress, json, os, platform, re, shutil, socket, subprocess, threading, time
+import ipaddress, json, os, platform, re, shutil, socket, subprocess, threading, time, sys
 from collections import deque
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -162,9 +162,25 @@ class H(BaseHTTPRequestHandler):
         self.send_response(404); self.end_headers()
     def log_message(self, *a): pass
 
+
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    """Ignore routine client disconnects while writing browser responses."""
+
+    def handle_error(self, request, client_address):
+        error = sys.exc_info()[1]
+        expected_disconnect = isinstance(
+            error, (BrokenPipeError, ConnectionAbortedError, ConnectionResetError)
+        )
+        if isinstance(error, OSError) and getattr(error, "winerror", None) in (10053, 10054):
+            expected_disconnect = True
+        if expected_disconnect:
+            return
+        super().handle_error(request, client_address)
+
+
 if __name__ == "__main__":
     cpu()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
+    srv = QuietThreadingHTTPServer(("127.0.0.1", PORT), H)
     print(f"TermuxQ Agent aktif: http://127.0.0.1:{PORT}/stats  (Ctrl+C untuk berhenti)")
     try: srv.serve_forever()
     except KeyboardInterrupt: print("\nBerhenti.")

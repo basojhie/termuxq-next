@@ -90,3 +90,7 @@ Pembaruan otomatis Windows versi terbaru memisahkan prompt lokasi Agent ke subro
 
 
 Perbaikan lanjutan: jika ZIP diekstrak terpisah dari folder proyek, launcher meminta lokasi folder Agent melalui subroutine tersendiri agar input yang diketik tidak tergantikan oleh nilai variabel lama.
+
+
+### Pesan `ConnectionAbortedError` di terminal Windows
+Agent memakai server HTTP yang mengabaikan disconnect klien yang umum (`WinError 10053/10054`, `BrokenPipeError`, `ConnectionResetError`) saat browser membatalkan/memutus permintaan. Error server yang tidak dikenal tetap dicatat, jadi masalah tak terduga tidak disembunyikan.

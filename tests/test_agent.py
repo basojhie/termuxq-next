@@ -89,6 +89,28 @@ class AgentHttpTests(unittest.TestCase):
         status, _, _ = self.request(path="/stats", host="evil.example")
         self.assertEqual(status, 404)
 
+    def test_server_suppresses_expected_client_disconnect_errors(self):
+        server = agent.QuietThreadingHTTPServer(("127.0.0.1", 0), agent.H)
+        try:
+            error = ConnectionAbortedError("client closed connection")
+            with mock.patch.object(agent.sys, "exc_info", return_value=(type(error), error, None)), \
+                 mock.patch.object(agent.ThreadingHTTPServer, "handle_error") as parent_handler:
+                server.handle_error(None, ("127.0.0.1", 12345))
+                parent_handler.assert_not_called()
+        finally:
+            server.server_close()
+
+    def test_server_still_reports_unexpected_errors(self):
+        server = agent.QuietThreadingHTTPServer(("127.0.0.1", 0), agent.H)
+        try:
+            error = RuntimeError("unexpected")
+            with mock.patch.object(agent.sys, "exc_info", return_value=(type(error), error, None)), \
+                 mock.patch.object(agent.ThreadingHTTPServer, "handle_error") as parent_handler:
+                server.handle_error(None, ("127.0.0.1", 12345))
+                parent_handler.assert_called_once()
+        finally:
+            server.server_close()
+
     def test_preflight_allows_only_get(self):
         status, headers, _ = self.request(path="/stats", method="OPTIONS", origin="https://basojhie.github.io")
         self.assertEqual(status, 204)

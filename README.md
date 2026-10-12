@@ -14,7 +14,7 @@ Di HP (Chrome): menu ⋮ > **Install app** / **Add to Home Screen** untuk memaka
 
 ## Struktur
 - `index.html` : seluruh UI (HTML + CSS + JS)
-- `manifest.json`, `sw.js`, `icons/` : PWA (instal & offline)
+- `manifest.json`, `sw.js`, dan ikon PNG di root : PWA (instal & offline)
 - `.nojekyll` : menonaktifkan pemrosesan Jekyll di GitHub Pages
 
 ## Deploy
@@ -24,4 +24,16 @@ Settings > Pages > Source: *Deploy from a branch* > `main` / `(root)`.
 Jangan commit token, password, atau konfigurasi pribadi ke repo publik.
 
 ## Sinkron dengan perangkat (opsional)
-Dashboard menampilkan data langsung dari browser (baterai, latensi, koneksi). Untuk CPU, RAM, storage, dan IP lokal, jalankan agent: `python agent/termuxq_agent.py`, lalu klik **Agent** di pojok kanan atas halaman. Agent hanya mendengarkan `127.0.0.1`, hanya membaca, dan hanya menerima permintaan dari `https://basojhie.github.io`.
+Dashboard memperbarui metrik browser setiap 3 detik. Untuk CPU, RAM, storage, uptime, baterai (jika didukung), dan IP lokal yang aktual, jalankan agent: `python termuxq_agent.py`. Saat dashboard dibuka melalui `http://localhost:8000` atau `http://127.0.0.1:8000`, dashboard mencoba menghubungkan agent lokal secara otomatis. Di GitHub Pages, buka modul **Device Sync (Agent)** lalu hubungkan secara manual bila browser mengizinkan akses jaringan lokal. Agent hanya mendengarkan `127.0.0.1`, hanya membaca statistik, dan tidak menjalankan perintah shell.
+
+
+## Menjalankan dashboard dan agent lokal
+
+### Windows
+Klik dua kali `START_TERMUXQ_LIVE.bat`. Script menyiapkan dependensi statistik bila diperlukan, menjalankan agent dan server web lokal, lalu membuka browser pada `http://localhost:8000`.
+
+### Termux / Linux / macOS
+Jalankan `bash start_termuxq_live.sh`. Di Termux, script mencoba membuka browser otomatis; jika tidak, kunjungi `http://127.0.0.1:8000`.
+
+### Batasan browser
+Tool yang dibuat dengan JavaScript/Web Crypto berjalan langsung di browser. Statistik CPU/RAM/storage/IP memerlukan agent lokal. Menu console dan modul yang diberi label preview/simulasi tidak menjalankan perintah sistem; browser tidak diberi akses shell bebas.

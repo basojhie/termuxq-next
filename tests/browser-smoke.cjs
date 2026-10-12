@@ -58,6 +58,8 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #description').fill('Browser automated test');
     await page.locator('#modal-app #ticket-form button[type="submit"]').click();
     assert.match(await page.locator('#modal-app #count').innerText(), /1 tiket tersimpan/);
+    await page.locator('#modal-app [data-response]').click();
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0].firstResponseAt));
     await page.locator('#modal-app select[data-status]').selectOption('In Progress');
     assert.equal(await page.locator('#modal-app select[data-status]').inputValue(), 'In Progress');
     const [download] = await Promise.all([
@@ -167,6 +169,39 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #sync-account').innerText(), /qa@example.com/);
     await page.locator('#modal-close').click();
 
+    // SLA monitor: test business-time targets, breach/risk counters, settings, and ticket timestamps.
+    await page.evaluate(() => {
+      const now = Date.now();
+      localStorage.setItem('tq_sla_config_v1', JSON.stringify({
+        businessStart:'00:00', businessEnd:'23:59', workDays:[0,1,2,3,4,5,6],
+        targets:{
+          Critical:{response:15,resolution:120},
+          High:{response:30,resolution:240},
+          Normal:{response:240,resolution:480},
+          Low:{response:480,resolution:1440}
+        }
+      }));
+      localStorage.setItem('tq_tickets', JSON.stringify([
+        {id:'sla-late',title:'Critical SLA overdue',device:'QA Workstation',priority:'Critical',status:'Open',createdAt:new Date(now-10*86400000).toISOString(),firstResponseAt:null,resolvedAt:null},
+        {id:'sla-risk',title:'Critical SLA near response deadline',device:'Ops Printer',priority:'Critical',status:'Open',createdAt:new Date(now-8*60000).toISOString(),firstResponseAt:null,resolvedAt:null},
+        {id:'sla-resolved',title:'Resolved within SLA',device:'Ops Laptop',priority:'Critical',status:'Resolved',createdAt:new Date(now-45*60000).toISOString(),firstResponseAt:new Date(now-40*60000).toISOString(),resolvedAt:new Date(now-10*60000).toISOString()}
+      ]));
+    });
+    await page.locator('[data-module="sla"]').click();
+    assert.equal(await page.locator('#modal-app #sla-total-active').innerText(), '2');
+    assert.equal(await page.locator('#modal-app #sla-response-late').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #sla-resolution-late').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #sla-at-risk').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #sla-resolved-on-time').innerText(), '1');
+    assert.match(await page.locator('#modal-app #sla-list').innerText(), /Terlambat respons/);
+    assert.match(await page.locator('#modal-app #sla-list').innerText(), /Penyelesaian terlambat/);
+    await page.locator('#modal-app #sla-critical-response').fill('20');
+    await page.locator('#modal-app #sla-save').click();
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_sla_config_v1')).targets.Critical.response), 20);
+    await page.locator('#modal-app #sla-search').fill('near response deadline');
+    assert.match(await page.locator('#modal-app #sla-list').innerText(), /Critical SLA near response deadline/);
+    await page.locator('#modal-close').click();
+
     // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.
     await page.locator('[data-module="auditlog"]').click();
     const auditText = await page.locator('#modal-app #audit-list').innerText();
@@ -207,10 +242,11 @@ const { chromium } = require('playwright');
     assert.match(checkText, /IT Operations Overview/);
     assert.match(checkText, /Cloud Sync \(Supabase\)/);
     assert.match(checkText, /Audit Trail \/ Activity Log/);
+    assert.match(checkText, /SLA & Ticket Priority Monitoring/);
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets, inventory, IT operations summary, cloud sync SDK flow, audit trail, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets with response/resolution timestamps, inventory, IT operations summary, cloud sync SDK flow, audit trail, SLA monitor, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

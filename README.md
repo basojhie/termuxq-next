@@ -136,3 +136,14 @@ Modul **Cloud Sync (Supabase)** akan menyatukan data IT Asset Inventory dan IT S
 Menu **Audit Trail / Activity Log** mencatat aktivitas penting di browser saat ini, termasuk membuat/mengubah/menghapus tiket, mengubah status tiket, menambah/mengedit/menghapus aset, pemeriksaan ping, impor/ekspor JSON, dan sinkronisasi cloud. Riwayat menyimpan waktu, jenis objek, tindakan, serta ringkasan—bukan password, publishable key, atau isi rahasia.
 
 Riwayat dibatasi hingga 500 aktivitas terakhir, dapat dicari/filter dan diekspor sebagai JSON. Log bersifat lokal per-browser pada `tq_audit_log_v1`; fitur ini belum menyalin audit log ke database Supabase. Gunakan ekspor berkala bila catatan perlu disimpan lebih lama.
+
+
+## SLA & Ticket Priority Monitoring
+
+Menu **SLA & Ticket Priority Monitoring** menghitung target respons pertama dan penyelesaian berdasarkan prioritas tiket (**Critical**, **High**, **Normal**, **Low**) serta jam/hari kerja yang dapat diatur. Contoh target awal: Critical 15 menit/2 jam kerja; High 30 menit/4 jam kerja; Normal 4 jam/1 hari kerja; Low 1 hari kerja/3 hari kerja. Angka ini adalah contoh dan harus disesuaikan dengan kebijakan perusahaan sebelum digunakan sebagai SLA resmi.
+
+- Atur mulai/akhir kerja dan hari kerja. Jam di luar rentang serta hari nonkerja tidak dihitung; kalender hari libur/cuti belum didukung.
+- Pada **IT Support Ticket Log**, tekan **Catat respons** saat petugas memberikan tanggapan pertama. Ini menyimpan `firstResponseAt`.
+- Saat status tiket berubah menjadi **Resolved**, `resolvedAt` dicatat otomatis. Jika tiket dibuka kembali, waktu selesai dihapus sampai tiket diselesaikan lagi.
+- Dasbor menunjukkan respons/penyelesaian yang melewati target, tenggat dalam 60 menit kerja, dan tiket yang selesai sesuai SLA.
+- Target tersimpan di `tq_sla_config_v1` dan tiket tetap menggunakan penyimpanan lokal. Pengaturan SLA dan hasil tidak otomatis dibagikan ke browser lain hingga alur sinkronisasi digunakan.

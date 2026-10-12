@@ -108,7 +108,8 @@ modules.push(
  {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']},
  {id:'opsdash',cat:'dashboard',icon:'▥',name:'IT Operations Overview',desc:'Ringkasan inventaris, status koneksi terakhir, serta tiket IT Support.',details:['Membaca data lokal dari IT Asset Inventory dan IT Support Ticket Log.','Status koneksi menggunakan hasil ping terakhir; dashboard tidak otomatis melakukan ping.','Data tetap berada di browser ini sampai sinkronisasi bersama diterapkan.']},
  {id:'synccloud',cat:'dashboard',icon:'⇄',name:'Cloud Sync (Supabase)',desc:'Sinkronkan tiket dan inventaris ke database bersama dengan login pengguna.',details:['Gunakan project Supabase milikmu; konfigurasi disimpan hanya pada browser.','RLS membatasi setiap akun pada baris datanya sendiri.','Data cloud hanya diperbarui saat pengguna menekan tombol sinkronisasi.']},
- {id:'auditlog',cat:'productivity',icon:'▤',name:'Audit Trail / Activity Log',desc:'Riwayat tindakan penting pada tiket dan inventaris untuk penelusuran troubleshooting.',details:['Mencatat waktu dan ringkasan perubahan pada browser ini.','Mendukung pencarian dan ekspor JSON untuk audit lokal.','Riwayat ini belum disinkronkan ke cloud; data disimpan lokal di browser ini.']}
+ {id:'auditlog',cat:'productivity',icon:'▤',name:'Audit Trail / Activity Log',desc:'Riwayat tindakan penting pada tiket dan inventaris untuk penelusuran troubleshooting.',details:['Mencatat waktu dan ringkasan perubahan pada browser ini.','Mendukung pencarian dan ekspor JSON untuk audit lokal.','Riwayat ini belum disinkronkan ke cloud; data disimpan lokal di browser ini.']},
+ {id:'sla',cat:'productivity',icon:'◷',name:'SLA & Ticket Priority Monitoring',desc:'Pantau tenggat respons/penyelesaian berdasarkan prioritas dan kalender jam kerja.',details:['Target SLA dapat diubah per prioritas Critical, High, Normal, dan Low.','Tiket menyediakan pencatatan waktu respons pertama; waktu penyelesaian dicatat saat status menjadi Resolved.','Perhitungan memakai jam kerja dan hari kerja yang dikonfigurasi, dalam zona waktu browser.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -381,6 +382,145 @@ A.auditlog=r=>{
  draw();
 };
 
+A.sla=r=>{
+ const configKey='tq_sla_config_v1',ticketKey='tq_tickets';
+ const defaults={businessStart:'09:00',businessEnd:'17:00',workDays:[1,2,3,4,5],targets:{Critical:{response:15,resolution:120},High:{response:30,resolution:240},Normal:{response:240,resolution:480},Low:{response:480,resolution:1440}}};
+ let cfg=readConfig();
+ const g=mk(r,'<div class="small">Pantau tenggat respons pertama dan penyelesaian tiket. Perhitungan memakai jam/hari kerja yang kamu atur di bawah, berdasarkan zona waktu komputer/browser ini. Tetapkan target sesuai kebijakan perusahaan sebelum dipakai sebagai laporan SLA resmi.</div><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><div class="row" style="justify-content:space-between;align-items:center"><strong>Pengaturan jam kerja</strong><button class="btn secondary" id="sla-refresh" type="button">Segarkan tiket</button></div><div class="row" style="margin-top:8px"><label style="flex:1;min-width:140px">Mulai kerja<input id="sla-start" type="time" value="09:00" style="width:100%"></label><label style="flex:1;min-width:140px">Akhir kerja<input id="sla-end" type="time" value="17:00" style="width:100%"></label></div><div class="small" style="margin:8px 0 4px">Hari kerja</div><div class="row" id="sla-days" style="gap:7px"><label><input type="checkbox" data-sla-day="1" checked> Sen</label><label><input type="checkbox" data-sla-day="2" checked> Sel</label><label><input type="checkbox" data-sla-day="3" checked> Rab</label><label><input type="checkbox" data-sla-day="4" checked> Kam</label><label><input type="checkbox" data-sla-day="5" checked> Jum</label><label><input type="checkbox" data-sla-day="6"> Sab</label><label><input type="checkbox" data-sla-day="0"> Min</label></div><strong style="display:block;margin-top:12px">Target SLA per prioritas (menit kerja)</strong><div class="small">Respons pertama dan penyelesaian memiliki target terpisah. Contoh awal di bawah ini dapat disesuaikan.</div><div style="display:grid;grid-template-columns:minmax(75px,.6fr) minmax(100px,1fr) minmax(100px,1fr);gap:8px;align-items:center;margin-top:8px"><strong>Prioritas</strong><strong>Respons (menit)</strong><strong>Selesai (menit)</strong><span>Critical</span><input id="sla-critical-response" type="number" min="1" max="43200" aria-label="Critical response minutes"><input id="sla-critical-resolution" type="number" min="1" max="43200" aria-label="Critical resolution minutes"><span>High</span><input id="sla-high-response" type="number" min="1" max="43200" aria-label="High response minutes"><input id="sla-high-resolution" type="number" min="1" max="43200" aria-label="High resolution minutes"><span>Normal</span><input id="sla-normal-response" type="number" min="1" max="43200" aria-label="Normal response minutes"><input id="sla-normal-resolution" type="number" min="1" max="43200" aria-label="Normal resolution minutes"><span>Low</span><input id="sla-low-response" type="number" min="1" max="43200" aria-label="Low response minutes"><input id="sla-low-resolution" type="number" min="1" max="43200" aria-label="Low resolution minutes"></div><div class="row" style="margin-top:10px"><button class="btn" id="sla-save" type="button">Simpan pengaturan SLA</button></div><div id="sla-config-message" class="small" aria-live="polite" style="margin-top:6px">Pengaturan lokal.</div></section><div id="sla-metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin-top:12px"></div><div class="row" style="margin-top:12px"><input id="sla-search" placeholder="Cari tiket…" style="flex:1;min-width:160px"><select id="sla-priority-filter" style="flex:1;min-width:130px"><option value="">Semua prioritas</option><option>Critical</option><option>High</option><option>Normal</option><option>Low</option></select></div><div class="out" id="sla-info" aria-live="polite">Memuat tiket…</div><div id="sla-list"></div><div class="small" style="margin-top:10px">Aturan waktu: jam di luar jadwal dan hari nonkerja tidak dihitung. Hari libur nasional/cuti belum dikecualikan. Catat respons pertama secara manual di IT Support Ticket Log; waktu penyelesaian dicatat saat status tiket diubah menjadi Resolved.</div>');
+ function readConfig(){
+  const source=ls(configKey,{}),raw=source&&typeof source==='object'?source:{};
+  const timeOK=value=>typeof value==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+  const c={businessStart:timeOK(raw.businessStart)?raw.businessStart:defaults.businessStart,businessEnd:timeOK(raw.businessEnd)?raw.businessEnd:defaults.businessEnd,workDays:Array.isArray(raw.workDays)?[...new Set(raw.workDays.filter(n=>Number.isInteger(n)&&n>=0&&n<=6))]:defaults.workDays.slice(),targets:{}};
+  if(!c.workDays.length)c.workDays=defaults.workDays.slice();
+  for(const p of Object.keys(defaults.targets)){
+   c.targets[p]={};
+   for(const metric of ['response','resolution']){
+    const v=Number(raw.targets&&raw.targets[p]&&raw.targets[p][metric]);
+    c.targets[p][metric]=Number.isInteger(v)&&v>=1&&v<=43200?v:defaults.targets[p][metric];
+   }
+  }
+  return c;
+ }
+ const minuteOf=value=>{const parts=value.split(':').map(Number);return parts[0]*60+parts[1]};
+ const isWorkDay=(date,settings)=>settings.workDays.includes(date.getDay());
+ const setClock=(date,value)=>{const parts=value.split(':').map(Number);date.setHours(parts[0],parts[1],0,0);return date};
+ const nextWorkWindow=(input,settings)=>{
+  const date=new Date(input),start=minuteOf(settings.businessStart),end=minuteOf(settings.businessEnd);
+  for(let i=0;i<3700;i++){
+   if(!isWorkDay(date,settings)||date.getHours()*60+date.getMinutes()>=end){date.setDate(date.getDate()+1);setClock(date,settings.businessStart);continue}
+   if(date.getHours()*60+date.getMinutes()<start)setClock(date,settings.businessStart);
+   return date;
+  }
+  return null;
+ };
+ const addBusinessMinutes=(input,minutes,settings)=>{
+  let date=nextWorkWindow(input,settings),remaining=Math.max(0,minutes),guard=0;
+  if(!date)return null;
+  const end=minuteOf(settings.businessEnd);
+  while(guard++<3700){
+   const endTime=new Date(date);endTime.setHours(Math.floor(end/60),end%60,0,0);
+   const available=Math.max(0,(endTime.getTime()-date.getTime())/60000);
+   if(remaining<=available)return new Date(date.getTime()+remaining*60000);
+   remaining-=available;date.setDate(date.getDate()+1);setClock(date,settings.businessStart);date=nextWorkWindow(date,settings);
+   if(!date)return null;
+  }
+  return null;
+ };
+ const businessMinutesBetween=(from,to,settings)=>{
+  const start=Date.parse(from instanceof Date?from.toISOString():from),end=Date.parse(to instanceof Date?to.toISOString():to);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return 0;
+  const begin=minuteOf(settings.businessStart),finish=minuteOf(settings.businessEnd);let total=0,day=new Date(start);day.setHours(0,0,0,0);
+  for(let i=0;i<3700&&day.getTime()<=end;i++,day.setDate(day.getDate()+1)){
+   if(!isWorkDay(day,settings))continue;
+   const fromWindow=new Date(day);fromWindow.setHours(Math.floor(begin/60),begin%60,0,0);
+   const toWindow=new Date(day);toWindow.setHours(Math.floor(finish/60),finish%60,0,0);
+   const left=Math.max(start,fromWindow.getTime()),right=Math.min(end,toWindow.getTime());
+   if(right>left)total+=(right-left)/60000;
+  }
+  return total;
+ };
+ const duration=minutes=>{
+  if(!Number.isFinite(minutes))return '—';
+  const m=Math.max(0,Math.round(minutes));
+  if(m<60)return m+' menit';
+  const perDay=minuteOf(cfg.businessEnd)-minuteOf(cfg.businessStart),days=Math.floor(m/perDay),rest=m%perDay;
+  if(days&&rest)return days+' hari kerja '+Math.floor(rest/60)+' jam';
+  if(days)return days+' hari kerja';
+  return Math.floor(m/60)+(m%60?' jam '+m%60+' menit':' jam');
+ };
+ const timeText=value=>{const n=Date.parse(value||'');return Number.isFinite(n)?new Date(n).toLocaleString('id-ID'):'Belum tercatat'};
+ const parseTime=value=>{const n=Date.parse(value||'');return Number.isFinite(n)?n:null};
+ const ticketsNow=()=>{const v=ls(ticketKey,[]);return Array.isArray(v)?v.filter(t=>t&&typeof t==='object'):[]};
+ const evaluate=(ticket,settings,now)=>{
+  const created=parseTime(ticket.createdAt),priority=Object.hasOwn(settings.targets,ticket.priority)?ticket.priority:'Normal',target=settings.targets[priority];
+  if(created===null)return {ticket,priority,created:null,responseDue:null,resolutionDue:null,notes:'Waktu pembuatan tiket tidak valid.'};
+  const responseDue=addBusinessMinutes(new Date(created),target.response,settings),resolutionDue=addBusinessMinutes(new Date(created),target.resolution,settings);
+  const firstResponse=parseTime(ticket.firstResponseAt),resolved=parseTime(ticket.resolvedAt);
+  const responseLate=responseDue?firstResponse!==null?firstResponse>responseDue:now>responseDue.getTime():false;
+  const resolutionLate=resolutionDue?(ticket.status==='Resolved'?(resolved!==null&&resolved>resolutionDue.getTime()):(now>resolutionDue.getTime())):false;
+  const active=ticket.status!=='Resolved';
+  const responseRemaining=firstResponse===null&&responseDue&&now<=responseDue.getTime()?businessMinutesBetween(new Date(now),responseDue,settings):Infinity;
+  const resolutionRemaining=active&&resolutionDue&&now<=resolutionDue.getTime()?businessMinutesBetween(new Date(now),resolutionDue,settings):Infinity;
+  const atRisk=active&&((firstResponse===null&&!responseLate&&responseRemaining<=60)||(resolutionRemaining<=60&&resolutionRemaining!==Infinity));
+  const resolvedWithin=ticket.status==='Resolved'&&resolved!==null&&!!resolutionDue&&resolved<=resolutionDue.getTime();
+  return {ticket,priority,created:new Date(created),responseDue,resolutionDue,firstResponse:firstResponse===null?null:new Date(firstResponse),resolved:resolved===null?null:new Date(resolved),responseLate,resolutionLate,active,atRisk,resolvedWithin,responseRemaining,resolutionRemaining};
+ };
+ const statusInfo=(kind,item)=>{
+  let text='',color='var(--muted)';
+  if(kind==='response'){
+   if(item.firstResponse){const late=item.responseLate;text=late?'Respons melewati SLA':'Respons tepat waktu';color=late?'var(--red)':'var(--ok)'}
+   else if(item.responseLate){text='Terlambat respons';color='var(--red)'}
+   else if(item.responseRemaining<=60){text='Segera jatuh tempo';color='var(--yellow)'}
+   else text='Menunggu respons';
+  }else{
+   if(item.ticket.status==='Resolved'){
+    if(!item.resolved){text='Waktu selesai belum tercatat';color='var(--muted)'}
+    else if(item.resolutionLate){text='Selesai melewati SLA';color='var(--red)'}
+    else{text='Selesai sesuai SLA';color='var(--ok)'}
+   }else if(item.resolutionLate){text='Penyelesaian terlambat';color='var(--red)'}
+   else if(item.resolutionRemaining<=60){text='Deadline dekat';color='var(--yellow)'}
+   else{text='Dalam batas';color='var(--ok)'}
+  }
+  return '<span class="mini-tag" style="color:'+color+'">'+esc(text)+'</span>';
+ };
+ const fillForm=()=>{
+  g('#sla-start').value=cfg.businessStart;g('#sla-end').value=cfg.businessEnd;
+  r.querySelectorAll('[data-sla-day]').forEach(el=>el.checked=cfg.workDays.includes(Number(el.dataset.slaDay)));
+  for(const p of Object.keys(cfg.targets)){g('#sla-'+p.toLowerCase()+'-response').value=cfg.targets[p].response;g('#sla-'+p.toLowerCase()+'-resolution').value=cfg.targets[p].resolution}
+ };
+ const draw=()=>{
+  const now=Date.now(),settings=cfg,tickets=ticketsNow(),evaluated=tickets.map(t=>evaluate(t,settings,now));
+  const active=evaluated.filter(x=>x.active),responseLate=evaluated.filter(x=>x.responseLate).length,resolutionLate=evaluated.filter(x=>x.resolutionLate).length,atRisk=active.filter(x=>x.atRisk).length,resolvedWithin=evaluated.filter(x=>x.resolvedWithin).length;
+  const metrics=[['sla-total-active','Tiket aktif',active.length,'Belum berstatus Resolved'],['sla-response-late','Respons lewat SLA',responseLate,'Respons telat atau belum ditanggapi'],['sla-resolution-late','Penyelesaian lewat SLA',resolutionLate,'Terlambat atau tiket masih terbuka'],['sla-at-risk','Mendekati tenggat',atRisk,'Tenggat dalam 60 menit kerja'],['sla-resolved-on-time','Selesai sesuai SLA',resolvedWithin,'Waktu selesai tercatat dan sesuai target']];
+  g('#sla-metrics').innerHTML=metrics.map(([id,title,value,note])=>'<article class="panel" style="padding:11px;box-shadow:none"><div class="small">'+esc(title)+'</div><div id="'+id+'" style="font-size:25px;font-weight:800;margin:5px 0">'+value+'</div><div class="small">'+esc(note)+'</div></article>').join('');
+  const q=g('#sla-search').value.trim().toLowerCase(),filter=g('#sla-priority-filter').value,order={Critical:0,High:1,Normal:2,Low:3};
+  const shown=evaluated.filter(x=>(!filter||x.priority===filter)&&[x.ticket.title,x.ticket.device,x.ticket.status,x.priority,x.ticket.description,x.ticket.assetRef&&x.ticket.assetRef.name].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>(order[a.priority]??2)-(order[b.priority]??2)||(a.resolutionDue?.getTime()||Infinity)-(b.resolutionDue?.getTime()||Infinity)).slice(0,150);
+  g('#sla-info').textContent=tickets.length+' tiket dianalisis · '+shown.length+' ditampilkan · tenggat dihitung dari jam kerja';
+  g('#sla-list').innerHTML=shown.map(item=>{
+   const t=item.ticket,device=t.assetRef&&t.assetRef.name||t.device||'Perangkat belum ditentukan';
+   const responseDue=item.responseDue?timeText(item.responseDue.toISOString()):'Tidak tersedia',resolutionDue=item.resolutionDue?timeText(item.resolutionDue.toISOString()):'Tidak tersedia';
+   return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between;align-items:flex-start"><strong style="overflow-wrap:anywhere">'+esc(t.title||'Tiket tanpa judul')+'</strong><span class="mini-tag">'+esc(item.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.status||'Open')+' · '+esc(device)+' · Dibuat '+esc(item.created?timeText(item.created.toISOString()):'Waktu tidak valid')+'</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:8px;margin-top:8px"><div class="panel" style="padding:9px;box-shadow:none"><div class="small">Respons pertama · target '+esc(duration(cfg.targets[item.priority].response))+'</div>'+statusInfo('response',item)+'<div class="small" style="margin-top:5px">Batas: '+esc(responseDue)+'</div>'+(item.firstResponse?'<div class="small">Dicatat: '+esc(timeText(item.firstResponse.toISOString()))+'</div>':'')+'</div><div class="panel" style="padding:9px;box-shadow:none"><div class="small">Penyelesaian · target '+esc(duration(cfg.targets[item.priority].resolution))+'</div>'+statusInfo('resolution',item)+'<div class="small" style="margin-top:5px">Batas: '+esc(resolutionDue)+'</div>'+(item.resolved?'<div class="small">Selesai: '+esc(timeText(item.resolved.toISOString()))+'</div>':'')+'</div></div></article>';
+  }).join('')||'<div class="out">Tidak ada tiket yang cocok. Buat tiket melalui IT Support Ticket Log terlebih dahulu.</div>';
+ };
+ g('#sla-save').onclick=()=>{
+  const start=g('#sla-start').value,end=g('#sla-end').value;
+  if(!start||!end||minuteOf(start)>=minuteOf(end)){g('#sla-config-message').textContent='Jam akhir kerja harus setelah jam mulai dalam hari yang sama.';return}
+  const workDays=[...r.querySelectorAll('[data-sla-day]:checked')].map(el=>Number(el.dataset.slaDay));
+  if(!workDays.length){g('#sla-config-message').textContent='Pilih minimal satu hari kerja.';return}
+  const targets={};
+  for(const p of Object.keys(defaults.targets)){targets[p]={};for(const metric of ['response','resolution']){
+   const value=Number(g('#sla-'+p.toLowerCase()+'-'+metric).value);
+   if(!Number.isInteger(value)||value<1||value>43200){g('#sla-config-message').textContent='Target '+p+' ('+metric+') harus berupa bilangan 1–43200 menit.';return}
+   targets[p][metric]=value;
+  }}
+  cfg={businessStart:start,businessEnd:end,workDays,targets};sv(configKey,cfg);
+  auditEvent('Atur SLA','SLA','Jam '+start+'–'+end+' · hari kerja '+workDays.join(',')+' · target diperbarui');
+  g('#sla-config-message').textContent='Pengaturan disimpan pada browser ini.';draw();
+ };
+ g('#sla-refresh').onclick=draw;g('#sla-search').oninput=draw;g('#sla-priority-filter').onchange=draw;
+ fillForm();draw();
+};
+
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');
  const run=async()=>{
@@ -397,6 +537,7 @@ A.check=r=>{
   add('IT Operations Overview',typeof A.opsdash==='function','Handler modul '+(typeof A.opsdash==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Cloud Sync (Supabase)',typeof A.synccloud==='function','Handler modul '+(typeof A.synccloud==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Audit Trail / Activity Log',typeof A.auditlog==='function','Handler modul '+(typeof A.auditlog==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('SLA & Ticket Priority Monitoring',typeof A.sla==='function','Handler modul '+(typeof A.sla==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){
@@ -472,9 +613,10 @@ A.tickets=r=>{
   g('#count').textContent=tickets.length+' tiket tersimpan · '+tickets.filter(t=>t.status!=='Resolved').length+' belum selesai';
   g('#list').innerHTML=shown.map(t=>{
    const linked=t.assetRef&&typeof t.assetRef.name==='string'?'<div class="small" style="margin:5px 0;color:var(--cyan)">Aset terkait: '+esc(assetLabel(t.assetRef))+'</div>':'';
-   return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between"><strong>'+esc(t.title)+'</strong><span class="mini-tag">'+esc(t.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.device||'Perangkat tidak ditentukan')+' · '+esc(new Date(t.createdAt).toLocaleString('id-ID'))+'</div>'+linked+'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--text)">'+esc(t.description||'Tidak ada detail')+'</div><div class="row"><select data-status="'+esc(t.id)+'" aria-label="Status tiket" style="flex:1;min-width:120px">'+opt(statuses,t.status)+'</select><button class="btn" type="button" data-delete="'+esc(t.id)+'">Hapus</button></div></article>';
+   return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between"><strong>'+esc(t.title)+'</strong><span class="mini-tag">'+esc(t.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.device||'Perangkat tidak ditentukan')+' · '+esc(new Date(t.createdAt).toLocaleString('id-ID'))+'</div>'+linked+(t.firstResponseAt?'<div class="small" style="margin:4px 0">Respons pertama: '+esc(new Date(t.firstResponseAt).toLocaleString('id-ID'))+'</div>':'')+(t.resolvedAt?'<div class="small" style="margin:4px 0">Selesai: '+esc(new Date(t.resolvedAt).toLocaleString('id-ID'))+'</div>':'')+'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--text)">'+esc(t.description||'Tidak ada detail')+'</div><div class="row"><select data-status="'+esc(t.id)+'" aria-label="Status tiket" style="flex:1;min-width:120px">'+opt(statuses,t.status)+'</select>'+(t.firstResponseAt?'<span class="mini-tag">Respons tercatat</span>':'<button class="btn secondary" type="button" data-response="'+esc(t.id)+'">Catat respons</button>')+'<button class="btn" type="button" data-delete="'+esc(t.id)+'">Hapus</button></div></article>';
   }).join('')||'<div class="out">Tidak ada tiket yang sesuai.</div>';
-  g('#list').querySelectorAll('[data-status]').forEach(el=>el.onchange=()=>{const t=tickets.find(x=>x.id===el.dataset.status);if(t){const previous=t.status,next=el.value;t.status=next;save();auditEvent('Ubah status','Tiket',t.title+' · '+previous+' → '+next);draw()}});
+  g('#list').querySelectorAll('[data-status]').forEach(el=>el.onchange=()=>{const t=tickets.find(x=>x.id===el.dataset.status);if(t){const previous=t.status,next=el.value;if(next==='Resolved'&&previous!=='Resolved')t.resolvedAt=new Date().toISOString();else if(next!=='Resolved'&&previous==='Resolved')t.resolvedAt=null;t.status=next;save();auditEvent('Ubah status','Tiket',t.title+' · '+previous+' → '+next);if(next==='Resolved'&&previous!=='Resolved')auditEvent('Waktu selesai dicatat','Tiket',t.title+' · '+t.resolvedAt);draw()}});
+  g('#list').querySelectorAll('[data-response]').forEach(el=>el.onclick=()=>{const t=tickets.find(x=>x.id===el.dataset.response);if(!t||t.firstResponseAt)return;t.firstResponseAt=new Date().toISOString();save();auditEvent('Respons pertama dicatat','Tiket',t.title+' · '+t.firstResponseAt);draw();g('#message').textContent='Waktu respons pertama tercatat untuk '+t.title+'.'});
   g('#list').querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(!confirm('Hapus tiket ini?'))return;const removed=tickets.find(x=>x.id===el.dataset.delete);if(removed)auditEvent('Hapus','Tiket',removed.title);tickets=tickets.filter(x=>x.id!==el.dataset.delete);save();draw();g('#message').textContent='Tiket dihapus.'});
  };
  g('#ticket-form').onsubmit=e=>{
@@ -483,7 +625,7 @@ A.tickets=r=>{
   if(tickets.length>=500){g('#message').textContent='Batas 500 tiket tercapai. Ekspor lalu arsipkan beberapa tiket terlebih dahulu.';return}
   const asset=selectedAsset(),chosen=g('#asset-link').value;
   if(chosen&&!asset){g('#message').textContent='Aset pilihan tidak ditemukan lagi. Segarkan daftar aset atau pilih kembali.';refreshAssetOptions();return}
-  const ticket={id:idNew(),title:title,device:g('#device').value.trim(),assetRef:assetRefFor(asset),priority:g('#priority').value,description:g('#description').value.trim(),status:'Open',createdAt:new Date().toISOString()};
+  const ticket={id:idNew(),title:title,device:g('#device').value.trim(),assetRef:assetRefFor(asset),priority:g('#priority').value,description:g('#description').value.trim(),status:'Open',createdAt:new Date().toISOString(),firstResponseAt:null,resolvedAt:null};
   tickets.unshift(ticket);save();auditEvent('Buat','Tiket',ticket.title+(asset?' · '+asset.name:''));g('#ticket-form').reset();refreshAssetOptions();draw();g('#message').textContent=asset?'Tiket dibuat dan dikaitkan dengan '+asset.name+'.':'Tiket dibuat dan disimpan pada browser ini.';
  };
  g('#q').oninput=draw;g('#filter').onchange=draw;
@@ -498,7 +640,7 @@ A.tickets=r=>{
     if(!x||typeof x.title!=='string'||!x.title.trim())continue;
     const id=String(x.id||idNew()).slice(0,80);if(known.has(id))continue;
     const linked=x.assetRef&&typeof x.assetRef.name==='string'?{id:String(x.assetRef.id||'').slice(0,80),name:x.assetRef.name.slice(0,100),ip:String(x.assetRef.ip||'').slice(0,45),zone:String(x.assetRef.zone||'').slice(0,60)}:null;
-    tickets.push({id:id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt:!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString()});
+    tickets.push({id:id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt:!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString(),firstResponseAt:x.firstResponseAt&&!Number.isNaN(Date.parse(x.firstResponseAt))?new Date(x.firstResponseAt).toISOString():null,resolvedAt:x.resolvedAt&&!Number.isNaN(Date.parse(x.resolvedAt))?new Date(x.resolvedAt).toISOString():null});
     known.add(id);added++;if(tickets.length>=500)break;
    }
    save();draw();if(added)auditEvent('Impor JSON','Tiket',added+' tiket ditambahkan');g('#message').textContent='Impor selesai: '+added+' tiket baru.';

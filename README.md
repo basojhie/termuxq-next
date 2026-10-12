@@ -2,7 +2,10 @@
 
 Preview antarmuka (UI mockup) untuk toolkit IT Support TermuxQ. Satu halaman statis, tanpa dependensi dan tanpa backend.
 
-> Semua angka, log, dan tombol adalah **simulasi**. Halaman ini tidak menjalankan perintah Termux, scan jaringan, atau backup sungguhan.
+> Modul yang bisa berjalan di browser bekerja sungguhan dan diproses lokal. Modul yang butuh Termux (SSH, Git, backup, port, WoL, dll.) menampilkan perintah untuk disalin. Angka di panel Dashboard dan log masih data contoh.
+
+## Modul aktif di browser
+Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi, localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP ping, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
 
 ## Akses
 https://basojhie.github.io/termuxq-next/

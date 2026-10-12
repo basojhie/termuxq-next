@@ -5,20 +5,57 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $Port = 8765
-$AgentFile = Join-Path $TargetDirectory 'termuxq_agent.py'
 $AgentUrl = 'https://raw.githubusercontent.com/basojhie/termuxq-next/main/termuxq_agent.py'
-$TempFile = Join-Path $TargetDirectory 'termuxq_agent.download.tmp'
+$TempFile = $null
+$AgentFile = $null
 $BackupDirectory = Join-Path $env:LOCALAPPDATA 'TermuxQ\agent-backups'
 
 try {
+    # Normalize common copy/paste mistakes: surrounding quotes, or a filename
+    # passed where a folder was expected.
+    if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
+        $TargetDirectory = $PSScriptRoot
+    }
+    $TargetDirectory = $TargetDirectory.Trim()
+    if ($TargetDirectory.Length -ge 2) {
+        $first = $TargetDirectory[0]
+        $last = $TargetDirectory[$TargetDirectory.Length - 1]
+        if (($first -eq '"' -and $last -eq '"') -or ($first -eq "'" -and $last -eq "'")) {
+            $TargetDirectory = $TargetDirectory.Substring(1, $TargetDirectory.Length - 2).Trim()
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
+        throw 'Folder tujuan kosong. Masukkan folder tempat termuxq_agent.py berada.'
+    }
+
+    # If a file path was pasted, use its parent folder when it is a known file.
+    if (Test-Path -LiteralPath $TargetDirectory -PathType Leaf) {
+        $leafName = [System.IO.Path]::GetFileName($TargetDirectory)
+        if ($leafName -match '^(?i:termuxq_agent\.py|update_and_start_termuxq_agent\.ps1)$') {
+            $TargetDirectory = Split-Path -Parent $TargetDirectory
+        } else {
+            throw 'Kamu memasukkan path file, bukan folder. Pilih folder yang berisi termuxq_agent.py.'
+        }
+    }
+
+    try {
+        $TargetDirectory = [System.IO.Path]::GetFullPath($TargetDirectory)
+    } catch {
+        throw ('Path folder tidak valid. Hapus tanda kutip tambahan dan masukkan path folder saja. Detail: ' + $_.Exception.Message)
+    }
+
     if (-not (Test-Path -LiteralPath $TargetDirectory -PathType Container)) {
         throw ('Folder tujuan tidak ditemukan: ' + $TargetDirectory)
     }
 
+    $AgentFile = Join-Path $TargetDirectory 'termuxq_agent.py'
+    $TempFile = Join-Path $TargetDirectory 'termuxq_agent.download.tmp'
+
     Write-Host ''
     Write-Host '=== TermuxQ Agent Auto Update ===' -ForegroundColor Cyan
     Write-Host ('Folder agent: ' + $TargetDirectory)
-    Write-Host 'Mengunduh agent terbaru dari repository TermuxQ...'
+    Write-Host 'Mengunduh Agent terbaru dari repository resmi...'
 
     Invoke-WebRequest -UseBasicParsing -Uri $AgentUrl -OutFile $TempFile
     $candidate = Get-Content -LiteralPath $TempFile -Raw
@@ -33,21 +70,18 @@ try {
         if ($python) { $pythonPrefix = @('-3') }
     }
     if (-not $python) {
-        throw 'Python belum ditemukan. Instal Python 3 dari python.org, aktifkan Add Python to PATH, lalu jalankan file ini kembali.'
+        throw 'Python belum ditemukan. Instal Python 3, aktifkan Add Python to PATH, lalu jalankan file ini kembali.'
     }
 
-    if (-not (Test-Path -LiteralPath $BackupDirectory)) {
-        New-Item -ItemType Directory -Path $BackupDirectory -Force | Out-Null
-    }
+    New-Item -ItemType Directory -Path $BackupDirectory -Force | Out-Null
     if (Test-Path -LiteralPath $AgentFile -PathType Leaf) {
         $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $backupFile = Join-Path $BackupDirectory ('termuxq_agent_' + $stamp + '.py')
         Copy-Item -LiteralPath $AgentFile -Destination $backupFile
-        Write-Host ('Cadangan agent lama: ' + $backupFile) -ForegroundColor DarkGray
+        Write-Host ('Cadangan Agent lama: ' + $backupFile) -ForegroundColor DarkGray
     }
 
-    # Stop only the process listening on port 8765 when its command line identifies
-    # the TermuxQ agent. Refuse to stop another application occupying the port.
+    # Stop only a listener whose process is clearly the TermuxQ Python Agent.
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique)
     foreach ($listenerPid in $listeners) {
@@ -58,7 +92,7 @@ try {
         $isTermuxQ = $processInfo.CommandLine -match '(?i)termuxq_agent\.py'
         if ($isPython -and $isTermuxQ) {
             Stop-Process -Id ([int]$listenerPid) -Force
-            Start-Sleep -Milliseconds 700
+            Start-Sleep -Milliseconds 800
             Write-Host ('Agent lama dihentikan (PID ' + $listenerPid + ').') -ForegroundColor DarkGray
         } else {
             throw ('Port ' + $Port + ' sedang dipakai proses lain (PID ' + $listenerPid + ', ' + $processInfo.Name + '). Tidak dihentikan demi keamanan.')
@@ -66,9 +100,9 @@ try {
     }
 
     Move-Item -LiteralPath $TempFile -Destination $AgentFile -Force
-    $pythonArgumentList = @($pythonPrefix) + @(('"' + $AgentFile + '"'))
+    $pythonArgumentList = @($pythonPrefix) + @('"' + $AgentFile + '"')
     Start-Process -FilePath $python.Source -ArgumentList $pythonArgumentList -WorkingDirectory $TargetDirectory
-    Write-Host 'Agent baru sedang dinyalakan. Memverifikasi dukungan LAN ping...'
+    Write-Host 'Agent baru berjalan; memverifikasi dukungan LAN ping...'
 
     $verified = $false
     $stats = $null
@@ -81,24 +115,30 @@ try {
                 break
             }
         } catch {
-            # The new process may need another second to start.
+            # Give the Agent time to start.
         }
     }
 
     if (-not $verified) {
-        throw 'Agent belum berhasil diverifikasi. Pastikan Python berjalan dan port 8765 tidak diblokir. File agent baru tetap tersimpan; cek jendela agent untuk pesan error.'
+        throw 'Agent belum berhasil diverifikasi. Pastikan Python berjalan dan port 8765 tidak diblokir. Cek proses Agent untuk pesan error.'
     }
 
     Write-Host ''
     Write-Host ('BERHASIL: TermuxQ Agent ' + $stats.agent_version + ' aktif.') -ForegroundColor Green
     Write-Host ('Perangkat: ' + $stats.host)
     Write-Host 'Fitur LAN ping: tersedia.'
-    Write-Host 'Sekarang segarkan browser dengan Ctrl+F5, buka LAN Device Monitor, lalu ulangi ping.'
+    Write-Host 'Segarkan browser dengan Ctrl+F5, buka LAN Device Monitor, lalu coba ping kembali.'
 } catch {
+    # Preserve the original error; cleanup must never replace it with another path error.
+    $originalMessage = $_.Exception.Message
     Write-Host ''
-    Write-Host ('GAGAL: ' + $_.Exception.Message) -ForegroundColor Red
-    if (Test-Path -LiteralPath $TempFile) {
-        Remove-Item -LiteralPath $TempFile -Force -ErrorAction SilentlyContinue
+    Write-Host ('GAGAL: ' + $originalMessage) -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($TempFile)) {
+        try {
+            Remove-Item -LiteralPath $TempFile -Force -ErrorAction Stop
+        } catch {
+            Write-Host ('Peringatan: file sementara tidak berhasil dihapus: ' + $_.Exception.Message) -ForegroundColor DarkYellow
+        }
     }
     exit 1
 } finally {

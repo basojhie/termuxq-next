@@ -104,7 +104,8 @@ const modules=[
 modules.push(
  {id:'subnet',cat:'network',icon:'▦',name:'IPv4 Subnet Calculator',desc:'Hitung network, broadcast, mask, dan rentang host dari CIDR.',details:['Perhitungan IPv4 dilakukan lokal di browser.','Menerima format 192.168.1.10/24; tanpa prefix memakai /24.']},
  {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal.',details:['Data tiket disimpan di localStorage browser ini.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
- {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']}
+ {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']},
+ {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -198,6 +199,7 @@ A.check=r=>{
   try{const k='tq_health_'+Date.now(),v='ok';localStorage.setItem(k,v);const ok=localStorage.getItem(k)===v;localStorage.removeItem(k);add('Local storage',ok,ok?'Baca/tulis localStorage berhasil.':'Nilai yang dibaca berbeda.')}catch(e){add('Local storage',false,'Penyimpanan diblokir atau kuota tidak tersedia.')}
   add('IPv4 Subnet Calculator',typeof A.subnet==='function','Handler modul '+(typeof A.subnet==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Support Ticket Log',typeof A.tickets==='function','Handler modul '+(typeof A.tickets==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('IT Asset Inventory',typeof A.inventory==='function','Handler modul '+(typeof A.inventory==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){
@@ -343,6 +345,148 @@ A.lan=r=>{
  }; 
 };
 
+A.inventory=r=>{
+ const storageKey='tq_asset_inventory_v1';
+ let devices=ls(storageKey,[]);
+ const allowedTypes=['PC','Laptop','Printer','Server','Network','Other'];
+ const allowedStatuses=['Belum dicek','Online','No Reply','Error'];
+ if(!Array.isArray(devices))devices=[];
+ devices=devices.filter(d=>d&&typeof d.name==='string'&&typeof d.ip==='string');
+ const g=mk(r,'<label>Inventaris perangkat IT. Data tersimpan di browser ini saja. Untuk sinkronisasi antar-browser/perangkat dibutuhkan backend yang belum dipasang.</label>'+
+ '<form id="inv-form"><input id="inv-id" type="hidden"><div class="row"><input id="inv-name" maxlength="100" required placeholder="Nama perangkat (contoh: PC Kasir 01)" style="flex:1;min-width:190px"><input id="inv-zone" maxlength="60" placeholder="Zona / lokasi (contoh: Zona 14)" style="flex:1;min-width:150px"></div>'+
+ '<div class="row"><input id="inv-ip" maxlength="15" required spellcheck="false" placeholder="IP privat (contoh: 192.168.42.113)" style="flex:1;min-width:210px"><select id="inv-type" style="flex:1;min-width:120px"><option>PC</option><option>Laptop</option><option>Printer</option><option>Server</option><option>Network</option><option>Other</option></select></div>'+
+ '<textarea id="inv-notes" maxlength="500" rows="2" placeholder="Catatan: pengguna, model, lokasi detail, atau tindak lanjut"></textarea><div class="row"><button class="btn" id="inv-submit" type="submit">+ Tambah perangkat</button><button class="btn secondary" id="inv-cancel" type="button" hidden>Batalkan edit</button></div></form>'+
+ '<div class="row"><input id="inv-search" placeholder="Cari nama, IP, zona, tipe..." style="flex:1;min-width:180px"><select id="inv-zone-filter" style="flex:1;min-width:120px"><option value="">Semua zona</option></select></div>'+
+ '<div class="row"><button class="btn" id="inv-ping-visible" type="button">Ping tampil (maks. 24)</button><button class="btn secondary" id="inv-export" type="button">Ekspor JSON</button><label class="btn secondary" for="inv-import">Impor JSON<input id="inv-import" type="file" accept="application/json,.json" style="display:none"></label></div>'+
+ '<div class="out" id="inv-info" aria-live="polite">0 perangkat.</div><div class="small" id="inv-message" aria-live="polite">Tambahkan perangkat pertama kamu.</div><div id="inv-list"></div>'+
+ '<label>Pengamanan: IP dibatasi ke jaringan privat RFC1918 (10/8, 172.16/12, 192.168/16). Pemeriksaan ping hanya dilakukan pada perangkat milikmu atau yang kamu diberi izin untuk kelola.</label>');
+ const idNew=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+ const save=()=>sv(storageKey,devices);
+ const validPrivateIPv4=value=>{
+  if(typeof value!=='string'||!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value))return false;
+  const oct=value.split('.').map(Number);
+  if(oct.some(n=>!Number.isInteger(n)||n<0||n>255))return false;
+  return oct[0]===10||(oct[0]===172&&oct[1]>=16&&oct[1]<=31)||(oct[0]===192&&oct[1]===168);
+ };
+ const message=value=>{g('#inv-message').textContent=value};
+ const filtered=()=>{
+  const q=g('#inv-search').value.trim().toLowerCase(),zone=g('#inv-zone-filter').value;
+  return devices.filter(d=>(!zone||d.zone===zone)&&[d.name,d.zone,d.ip,d.type,d.notes].some(v=>String(v||'').toLowerCase().includes(q)))
+   .sort((a,b)=>String(a.zone||'').localeCompare(String(b.zone||''),'id')||a.name.localeCompare(b.name,'id'));
+ };
+ const draw=()=>{
+  const zone=g('#inv-zone-filter').value;
+  const zones=[...new Set(devices.map(d=>String(d.zone||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id'));
+  g('#inv-zone-filter').innerHTML='<option value="">Semua zona</option>'+zones.map(z=>'<option value="'+esc(z)+'">'+esc(z)+'</option>').join('');
+  if(zones.includes(zone))g('#inv-zone-filter').value=zone;
+  const online=devices.filter(d=>d.status==='Online').length, noReply=devices.filter(d=>d.status==='No Reply').length;
+  const shown=filtered();
+  g('#inv-info').textContent=devices.length+' perangkat tersimpan · '+online+' online · '+noReply+' tidak menjawab ping · '+shown.length+' ditampilkan';
+  g('#inv-list').innerHTML=shown.map(d=>{
+   const status=allowedStatuses.includes(d.status)?d.status:'Belum dicek';
+   const color=status==='Online'?'var(--ok)':status==='No Reply'?'var(--red)':status==='Error'?'var(--yellow)':'var(--muted)';
+   const checked=d.lastCheckedAt&& !Number.isNaN(Date.parse(d.lastCheckedAt))?new Date(d.lastCheckedAt).toLocaleString('id-ID'):'Belum pernah dicek';
+   const latency=Number.isFinite(d.latencyMs)?' · '+d.latencyMs+' ms':'';
+   return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none" data-asset="'+esc(d.id)+'">'+
+    '<div class="row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><strong>'+esc(d.name)+'</strong><div class="small" style="margin-top:4px">'+esc(d.ip)+' · '+esc(d.zone||'Zona belum diisi')+' · '+esc(allowedTypes.includes(d.type)?d.type:'Other')+'</div></div><span class="mini-tag" style="color:'+color+'">'+esc(status.toUpperCase())+'</span></div>'+
+    (d.notes?'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--muted);font-size:12px">'+esc(d.notes)+'</div>':'')+
+    '<div class="small" style="margin:6px 0">Cek terakhir: '+esc(checked+latency)+'</div>'+
+    (d.lastMessage?'<div class="small" style="margin:4px 0;overflow-wrap:anywhere">'+esc(d.lastMessage)+'</div>':'')+
+    '<div class="row" style="margin-top:8px"><button class="btn" type="button" data-asset-ping="'+esc(d.id)+'">Ping</button><button class="btn secondary" type="button" data-asset-edit="'+esc(d.id)+'">Edit</button><button class="btn secondary" type="button" data-asset-delete="'+esc(d.id)+'">Hapus</button></div></article>';
+  }).join('')||'<div class="out">Tidak ada perangkat yang sesuai filter. Tambahkan perangkat atau ubah pencarian/zona.</div>';
+  r.querySelectorAll('[data-asset-ping]').forEach(button=>button.onclick=async()=>{
+   const d=devices.find(x=>x.id===button.dataset.assetPing);if(!d)return;
+   if(!await ensureAgent())return;
+   button.disabled=true;message('Memeriksa '+d.name+' ('+d.ip+')…');
+   try{await doPing(d);save();draw();message('Pemeriksaan selesai untuk '+d.name+'.')}
+   catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();save();draw();message('Ping gagal: '+e.message)}
+  });
+  r.querySelectorAll('[data-asset-edit]').forEach(button=>button.onclick=()=>{
+   const d=devices.find(x=>x.id===button.dataset.assetEdit);if(!d)return;
+   g('#inv-id').value=d.id;g('#inv-name').value=d.name;g('#inv-zone').value=d.zone||'';g('#inv-ip').value=d.ip;g('#inv-type').value=allowedTypes.includes(d.type)?d.type:'Other';g('#inv-notes').value=d.notes||'';
+   g('#inv-submit').textContent='Simpan perubahan';g('#inv-cancel').hidden=false;message('Mode edit: '+d.name);g('#inv-form').scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+  r.querySelectorAll('[data-asset-delete]').forEach(button=>button.onclick=()=>{
+   const d=devices.find(x=>x.id===button.dataset.assetDelete);if(!d)return;
+   if(!confirm('Hapus perangkat "'+d.name+'" dari inventaris lokal?'))return;
+   devices=devices.filter(x=>x.id!==d.id);save();draw();message('Perangkat dihapus.');
+  });
+ };
+ const resetForm=()=>{
+  g('#inv-form').reset();g('#inv-id').value='';g('#inv-submit').textContent='+ Tambah perangkat';g('#inv-cancel').hidden=true;
+ };
+ const ensureAgent=async()=>{
+  if(!AG.on)await agentPoll();
+  if(!AG.on){message('Agent belum terhubung. Buka Device Sync (Agent), jalankan Agent, lalu coba lagi.');return false}
+  if(!AG.pingSupported){message('Agent terhubung tetapi versi lama. Perbarui termuxq_agent.py lalu jalankan ulang.');return false}
+  return true;
+ };
+ const doPing=async d=>{
+  const response=await fetch(AG.url+'/ping?host='+encodeURIComponent(d.ip),{cache:'no-store'});
+  let data={};
+  try{data=await response.json()}catch{}
+  if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
+  d.status=data.reachable?'Online':'No Reply';
+  d.latencyMs=Number.isFinite(data.latency_ms)?data.latency_ms:null;
+  d.lastCheckedAt=new Date().toISOString();d.lastMessage=data.message||'';
+ };
+ g('#inv-form').onsubmit=e=>{
+  e.preventDefault();
+  const id=g('#inv-id').value,name=g('#inv-name').value.trim(),zone=g('#inv-zone').value.trim(),ip=g('#inv-ip').value.trim(),type=g('#inv-type').value,notes=g('#inv-notes').value.trim();
+  if(!name){message('Nama perangkat wajib diisi.');return}
+  if(!validPrivateIPv4(ip)){message('Masukkan IP privat RFC1918 yang valid (10.x.x.x, 172.16–31.x.x, atau 192.168.x.x).');return}
+  if(devices.some(d=>d.ip===ip&&d.id!==id)){message('IP '+ip+' sudah terdaftar. Edit perangkat yang sudah ada agar tidak duplikat.');return}
+  const existing=devices.find(d=>d.id===id);
+  if(!existing&&devices.length>=500){message('Batas 500 perangkat. Ekspor inventaris sebelum mengarsipkan data lama.');return}
+  const item={id:id||(idNew()),name:name.slice(0,100),zone:zone.slice(0,60),ip:ip,type:allowedTypes.includes(type)?type:'Other',notes:notes.slice(0,500),status:existing&&allowedStatuses.includes(existing.status)?existing.status:'Belum dicek',latencyMs:existing&&Number.isFinite(existing.latencyMs)?existing.latencyMs:null,lastCheckedAt:existing?existing.lastCheckedAt||null:null,lastMessage:existing?existing.lastMessage||'':'',createdAt:existing?existing.createdAt||new Date().toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()};
+  if(existing)devices=devices.map(d=>d.id===id?item:d);else devices.unshift(item);
+  save();resetForm();draw();message(existing?'Perangkat diperbarui.':'Perangkat ditambahkan.');
+ };
+ g('#inv-cancel').onclick=()=>{resetForm();message('Edit dibatalkan.')};
+ g('#inv-search').oninput=draw;g('#inv-zone-filter').onchange=draw;
+ g('#inv-export').onclick=()=>{
+  const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),devices:devices},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-inventory-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Ekspor JSON disiapkan.');
+ };
+ g('#inv-import').onchange=async()=>{
+  const file=g('#inv-import').files[0];if(!file)return;
+  try{
+   const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.devices;
+   if(!Array.isArray(items))throw new Error('Berkas harus berupa array perangkat atau objek berisi properti devices.');
+   const ips=new Set(devices.map(d=>d.ip)),ids=new Set(devices.map(d=>d.id));let added=0,skipped=0;
+   for(const x of items.slice(0,500)){
+    if(!x||typeof x.name!=='string'||!x.name.trim()||typeof x.ip!=='string'||!validPrivateIPv4(x.ip.trim())){skipped++;continue}
+    const ip=x.ip.trim();if(ips.has(ip)||devices.length>=500){skipped++;continue}
+    let id=typeof x.id==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(x.id)?x.id:idNew();if(ids.has(id))id=idNew();
+    const status=allowedStatuses.includes(x.status)?x.status:'Belum dicek';
+    devices.push({id,name:x.name.trim().slice(0,100),zone:String(x.zone||'').slice(0,60),ip,type:allowedTypes.includes(x.type)?x.type:'Other',notes:String(x.notes||'').slice(0,500),status,latencyMs:Number.isFinite(x.latencyMs)?x.latencyMs:null,lastCheckedAt:x.lastCheckedAt&&!Number.isNaN(Date.parse(x.lastCheckedAt))?new Date(x.lastCheckedAt).toISOString():null,lastMessage:String(x.lastMessage||'').slice(0,200),createdAt:x.createdAt&&!Number.isNaN(Date.parse(x.createdAt))?new Date(x.createdAt).toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()});
+    ips.add(ip);ids.add(id);added++;
+   }
+   save();draw();message('Impor selesai: '+added+' perangkat ditambahkan, '+skipped+' dilewati (data tidak valid/duplikat/batas kapasitas).');
+  }catch(e){message('Impor gagal: '+e.message)}
+  finally{g('#inv-import').value=''}
+ };
+ g('#inv-ping-visible').onclick=async()=>{
+  const targets=filtered();
+  if(!targets.length){message('Tidak ada perangkat yang cocok untuk diperiksa.');return}
+  if(targets.length>24){message('Ada '+targets.length+' perangkat tampil. Filter pencarian/zona hingga maksimal 24 perangkat per batch.');return}
+  if(!await ensureAgent())return;
+  const button=g('#inv-ping-visible');button.disabled=true;button.textContent='Memeriksa…';let next=0,done=0,online=0,errors=0;
+  message('Memeriksa '+targets.length+' perangkat. Satu ping per perangkat, maksimal 24 tiap batch.');
+  const worker=async()=>{
+   while(next<targets.length){
+    const d=targets[next++];
+    try{await doPing(d);if(d.status==='Online')online++}
+    catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();errors++}
+    done++;g('#inv-info').textContent='Pemeriksaan '+done+'/'+targets.length+' · online '+online+' · error '+errors;
+   }
+  };
+  try{await Promise.all(Array.from({length:Math.min(3,targets.length)},()=>worker()));save();draw();message('Selesai: '+online+' online, '+(targets.length-online-errors)+' tidak menjawab, '+errors+' error.');act('▣','Inventaris diperiksa',online+' dari '+targets.length+' perangkat online.')}
+  finally{button.disabled=false;button.textContent='Ping tampil (maks. 24)'}
+ };
+ if(devices.length>500)devices=devices.slice(0,500);
+ draw();
+};
 const rows=[...document.querySelectorAll('.system-row')],nb=[...document.querySelectorAll('.network-box')],tags=[...document.querySelectorAll('#overview-panels .mini-tag')],st=[...document.querySelectorAll('.stat')],pulse=document.querySelector('.pulse');
 
 const metricHistoryKey='tq_metric_history_v1';

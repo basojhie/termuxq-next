@@ -67,6 +67,37 @@ const { chromium } = require('playwright');
     assert.equal(exported.tickets[0].status, 'In Progress');
     await page.locator('#modal-close').click();
 
+    // IT Asset Inventory: validation, add/edit, zone filtering, and JSON export.
+    await page.locator('[data-module="inventory"]').click();
+    await page.locator('#modal-app #inv-name').fill('QA Workstation');
+    await page.locator('#modal-app #inv-zone').fill('Zona QA');
+    await page.locator('#modal-app #inv-ip').fill('8.8.8.8');
+    await page.locator('#modal-app #inv-submit').click();
+    assert.match(await page.locator('#modal-app #inv-message').innerText(), /IP privat RFC1918/i);
+    assert.equal(await page.locator('#modal-app [data-asset]').count(), 0);
+    await page.locator('#modal-app #inv-ip').fill('192.168.1.20');
+    await page.locator('#modal-app #inv-type').selectOption('PC');
+    await page.locator('#modal-app #inv-submit').click();
+    assert.match(await page.locator('#modal-app #inv-info').innerText(), /1 perangkat tersimpan/);
+    assert.match(await page.locator('#modal-app #inv-list').innerText(), /QA Workstation/);
+    await page.locator('#modal-app [data-asset-edit]').click();
+    await page.locator('#modal-app #inv-zone').fill('Zona 2');
+    await page.locator('#modal-app #inv-submit').click();
+    assert.match(await page.locator('#modal-app #inv-list').innerText(), /Zona 2/);
+    await page.locator('#modal-app #inv-search').fill('not-found');
+    assert.equal(await page.locator('#modal-app [data-asset]').count(), 0);
+    await page.locator('#modal-app #inv-search').fill('');
+    const [inventoryDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#modal-app #inv-export').click()
+    ]);
+    assert.match(inventoryDownload.suggestedFilename(), /^termuxq-inventory-.*\\.json$/);
+    const inventoryPath = await inventoryDownload.path();
+    const inventoryExport = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
+    assert.equal(inventoryExport.devices[0].name, 'QA Workstation');
+    assert.equal(inventoryExport.devices[0].zone, 'Zona 2');
+    await page.locator('#modal-close').click();
+
     // Hashing: SHA-256 of known string.
     await page.locator('[data-module="hash"]').click();
     await page.locator('#modal-app #t').fill('abc');
@@ -85,10 +116,11 @@ const { chromium } = require('playwright');
     const checkText = await page.locator('#modal-app #check-results').innerText();
     assert.match(checkText, /IPv4 Subnet Calculator/);
     assert.match(checkText, /IT Support Ticket Log/);
+    assert.match(checkText, /IT Asset Inventory/);
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export, asset inventory CRUD/filter/export, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

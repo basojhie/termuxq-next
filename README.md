@@ -5,7 +5,7 @@ TermuxQ Next adalah toolkit IT Support berbasis browser. Tool client-side berjal
 > Dashboard tidak menggunakan angka resource contoh. Ketika agent tidak terhubung, antarmuka membedakan metrik browser/jaringan dari statistik sistem yang belum tersedia. Log aktivitas menampilkan peristiwa sesi saat ini.
 
 ## Modul aktif di browser
-Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi di localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, IT Support Ticket Log (localStorage + JSON import/export), IPv4 Subnet Calculator, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP response test, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
+Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi di localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, IT Support Ticket Log (localStorage + JSON import/export), IT Asset Inventory (localStorage + ping + JSON import/export), IPv4 Subnet Calculator, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP response test, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
 
 ## Akses
 https://basojhie.github.io/termuxq-next/
@@ -94,3 +94,9 @@ Perbaikan lanjutan: jika ZIP diekstrak terpisah dari folder proyek, launcher mem
 
 ### Pesan `ConnectionAbortedError` di terminal Windows
 Agent memakai server HTTP yang mengabaikan disconnect klien yang umum (`WinError 10053/10054`, `BrokenPipeError`, `ConnectionResetError`) saat browser membatalkan/memutus permintaan. Error server yang tidak dikenal tetap dicatat, jadi masalah tak terduga tidak disembunyikan.
+
+
+## IT Asset Inventory (fitur terbaru)
+Menu **IT Asset Inventory** membantu mencatat hingga 500 PC, laptop, printer, server, dan perangkat jaringan, berikut nama, zona/lokasi, IP privat, tipe, catatan, hasil ping terakhir, serta latensi bila tersedia. Fitur mendukung tambah/edit/hapus, pencarian, filter zona, ekspor dan impor JSON.
+
+Data inventaris disimpan pada localStorage browser ini dan tidak otomatis tersinkron ke browser/perangkat lain. IP divalidasi ke jaringan privat RFC1918. Tombol **Ping tampil (maks. 24)** menguji maksimal 24 perangkat pada satu batch menggunakan Agent yang terhubung; filter pencarian/zona dapat digunakan untuk memilih subset perangkat. Gunakan hanya untuk perangkat/jaringan yang dimiliki atau diizinkan.

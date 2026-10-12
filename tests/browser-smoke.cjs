@@ -172,8 +172,8 @@ const { chromium } = require('playwright');
     const auditText = await page.locator('#modal-app #audit-list').innerText();
     assert.match(auditText, /Ubah status|Tambah|Edit/);
     assert.match(await page.locator('#modal-app #audit-info').innerText(), /aktivitas tersimpan/);
-    await page.locator('#modal-app #audit-search').fill('Printer offline smoke test');
-    assert.match(await page.locator('#modal-app #audit-list').innerText(), /Printer offline smoke test/);
+    await page.locator('#modal-app #audit-search').fill('QA Workstation');
+    assert.match(await page.locator('#modal-app #audit-list').innerText(), /QA Workstation/);
     await page.locator('#modal-app #audit-search').fill('');
     const [auditDownload] = await Promise.all([
       page.waitForEvent('download'),

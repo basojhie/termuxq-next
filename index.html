@@ -135,7 +135,7 @@ function auditEvent(action,entity,details){
    at:new Date().toISOString(),
    action:String(action||'Aktivitas').slice(0,60),
    entity:String(entity||'Umum').slice(0,40),
-   details:String(details||'').replace(/[\\r\\n\\t]+/g,' ').slice(0,500)
+   details:String(details||'').replace(/[\r\n\t]+/g,' ').slice(0,500)
   });
   sv(auditStorageKey,entries.slice(0,500));
  }catch(_){}

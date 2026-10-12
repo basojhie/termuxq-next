@@ -107,3 +107,25 @@ Data inventaris disimpan pada localStorage browser ini dan tidak otomatis tersin
 Modul **IT Operations Overview** merangkum jumlah aset, hasil ping terakhir (Online, No Reply, Belum dicek, Error), tiket yang belum selesai, tiket prioritas High/Critical, serta tiket Resolved. Modul juga menampilkan beberapa tiket terbaru yang belum selesai dan aset yang perlu diperiksa.
 
 Dashboard hanya membaca `tq_asset_inventory_v1` dan `tq_tickets` dari `localStorage` browser yang sedang digunakan. Status perangkat adalah hasil pemeriksaan terakhir—modul tidak melakukan ping otomatis. Karena itu, ringkasan pada perangkat lain bisa berbeda sampai sinkronisasi database bersama diterapkan pada tahap berikutnya.
+
+
+## Cloud Sync antar-perangkat (Supabase)
+
+Modul **Cloud Sync (Supabase)** akan menyatukan data IT Asset Inventory dan IT Support Ticket Log di beberapa browser/perangkat melalui Supabase Auth + REST API.
+
+### Setup satu kali
+
+1. Buat project di Supabase.
+2. Buka **SQL Editor**, jalankan seluruh isi file [`supabase/schema.sql`](./supabase/schema.sql) untuk membuat tabel dan aturan Row Level Security (RLS).
+3. Buka pengaturan API pada project, salin Project URL serta **publishable key** (atau legacy `anon` key). Jangan pernah gunakan `service_role` atau secret key di website publik.
+4. Di TermuxQ, buka **Cloud Sync (Supabase)**, masukkan Project URL dan key, lalu simpan konfigurasi. Konfigurasi berlaku untuk browser tersebut.
+5. Buat akun melalui modul atau gunakan akun yang sudah dibuat. Jika verifikasi email diaktifkan, konfirmasi dahulu.
+6. Login dengan akun yang sama pada komputer 72 dan perangkat lain. Tekan **Sinkronkan sekarang** untuk menggabungkan data; jalankan lagi setelah perubahan aset/tiket.
+
+### Keamanan dan batasan
+
+- RLS membatasi row ke akun login yang sama melalui `auth.uid() = user_id`.
+- Sinkronisasi dilakukan manual sehingga data tidak dikirim ke cloud di latar belakang tanpa tindakan pengguna.
+- Konflik pada record yang sama memilih versi lokal di perangkat yang sedang sinkron; lakukan sync bergantian.
+- Penghapusan memakai penanda agar tersebar pada sinkronisasi berikutnya.
+- Sesi dan konfigurasi tersimpan di browser masing-masing. Jangan menonaktifkan RLS dan jangan memasukkan `service_role` atau secret key ke kode publik.

@@ -37,3 +37,9 @@ Jalankan `bash start_termuxq_live.sh`. Di Termux, script mencoba membuka browser
 
 ### Batasan browser
 Tool yang dibuat dengan JavaScript/Web Crypto berjalan langsung di browser. Statistik CPU/RAM/storage/IP memerlukan agent lokal. Menu console dan modul yang diberi label preview/simulasi tidak menjalankan perintah sistem; browser tidak diberi akses shell bebas.
+
+
+## Modul browser tambahan
+- **IPv4 Subnet Calculator** menghitung Network ID, Broadcast, subnet mask, wildcard, jumlah alamat, dan rentang host CIDR secara lokal.
+- **IT Support Ticket Log** menyimpan tiket troubleshooting lokal, mengubah status, mencari/menyaring tiket, serta mengimpor/mengekspor JSON untuk cadangan manual.
+- Dashboard dimulai dengan placeholder, bukan angka CPU/RAM/latensi statis. Nilai aktual dilabeli sesuai sumber data.

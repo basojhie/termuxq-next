@@ -183,6 +183,7 @@ A.http=r=>{
     o.textContent='Browser tidak dapat mengonfirmasi respons. Kemungkinan penyebab: CORS, DNS, koneksi, kebijakan jaringan, TLS, atau batas waktu. Detail teknis: '+(err2.name||'Error')+'. Tidak ada kesimpulan bahwa target pasti offline.';
    }
   }
+ };
 };
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');

@@ -22,3 +22,6 @@ Settings > Pages > Source: *Deploy from a branch* > `main` / `(root)`.
 
 ## Catatan keamanan
 Jangan commit token, password, atau konfigurasi pribadi ke repo publik.
+
+## Sinkron dengan perangkat (opsional)
+Dashboard menampilkan data langsung dari browser (baterai, latensi, koneksi). Untuk CPU, RAM, storage, dan IP lokal, jalankan agent: `python agent/termuxq_agent.py`, lalu klik **Agent** di pojok kanan atas halaman. Agent hanya mendengarkan `127.0.0.1`, hanya membaca, dan hanya menerima permintaan dari `https://basojhie.github.io`.

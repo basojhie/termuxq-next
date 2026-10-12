@@ -167,6 +167,24 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #sync-account').innerText(), /qa@example.com/);
     await page.locator('#modal-close').click();
 
+    // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.
+    await page.locator('[data-module="auditlog"]').click();
+    const auditText = await page.locator('#modal-app #audit-list').innerText();
+    assert.match(auditText, /Ubah status|Tambah|Edit/);
+    assert.match(await page.locator('#modal-app #audit-info').innerText(), /aktivitas tersimpan/);
+    await page.locator('#modal-app #audit-search').fill('Printer offline smoke test');
+    assert.match(await page.locator('#modal-app #audit-list').innerText(), /Printer offline smoke test/);
+    await page.locator('#modal-app #audit-search').fill('');
+    const [auditDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#modal-app #audit-export').click()
+    ]);
+    assert.match(auditDownload.suggestedFilename(), /^termuxq-audit-.*\.json$/);
+    const auditPath = await auditDownload.path();
+    const auditExport = JSON.parse(fs.readFileSync(auditPath, 'utf8'));
+    assert.ok(auditExport.entries.some(entry => entry.action === 'Ubah status'));
+    await page.locator('#modal-close').click();
+
     // Hashing: SHA-256 of known string.
     await page.locator('[data-module="hash"]').click();
     await page.locator('#modal-app #t').fill('abc');
@@ -188,10 +206,11 @@ const { chromium } = require('playwright');
     assert.match(checkText, /IT Asset Inventory/);
     assert.match(checkText, /IT Operations Overview/);
     assert.match(checkText, /Cloud Sync \(Supabase\)/);
+    assert.match(checkText, /Audit Trail \/ Activity Log/);
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets, inventory, IT operations summary, cloud sync SDK flow, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets, inventory, IT operations summary, cloud sync SDK flow, audit trail, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

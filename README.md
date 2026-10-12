@@ -129,3 +129,10 @@ Modul **Cloud Sync (Supabase)** akan menyatukan data IT Asset Inventory dan IT S
 - Konflik pada record yang sama memilih versi lokal di perangkat yang sedang sinkron; lakukan sync bergantian.
 - Penghapusan memakai penanda agar tersebar pada sinkronisasi berikutnya.
 - Sesi dan konfigurasi tersimpan di browser masing-masing. Jangan menonaktifkan RLS dan jangan memasukkan `service_role` atau secret key ke kode publik.
+
+
+## Audit Trail / Activity Log
+
+Menu **Audit Trail / Activity Log** mencatat aktivitas penting di browser saat ini, termasuk membuat/mengubah/menghapus tiket, mengubah status tiket, menambah/mengedit/menghapus aset, pemeriksaan ping, impor/ekspor JSON, dan sinkronisasi cloud. Riwayat menyimpan waktu, jenis objek, tindakan, serta ringkasan—bukan password, publishable key, atau isi rahasia.
+
+Riwayat dibatasi hingga 500 aktivitas terakhir, dapat dicari/filter dan diekspor sebagai JSON. Log bersifat lokal per-browser pada `tq_audit_log_v1`; fitur ini belum menyalin audit log ke database Supabase. Gunakan ekspor berkala bila catatan perlu disimpan lebih lama.

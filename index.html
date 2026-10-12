@@ -107,7 +107,8 @@ modules.push(
  {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']},
  {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']},
  {id:'opsdash',cat:'dashboard',icon:'▥',name:'IT Operations Overview',desc:'Ringkasan inventaris, status koneksi terakhir, serta tiket IT Support.',details:['Membaca data lokal dari IT Asset Inventory dan IT Support Ticket Log.','Status koneksi menggunakan hasil ping terakhir; dashboard tidak otomatis melakukan ping.','Data tetap berada di browser ini sampai sinkronisasi bersama diterapkan.']},
- {id:'synccloud',cat:'dashboard',icon:'⇄',name:'Cloud Sync (Supabase)',desc:'Sinkronkan tiket dan inventaris ke database bersama dengan login pengguna.',details:['Gunakan project Supabase milikmu; konfigurasi disimpan hanya pada browser.','RLS membatasi setiap akun pada baris datanya sendiri.','Data cloud hanya diperbarui saat pengguna menekan tombol sinkronisasi.']}
+ {id:'synccloud',cat:'dashboard',icon:'⇄',name:'Cloud Sync (Supabase)',desc:'Sinkronkan tiket dan inventaris ke database bersama dengan login pengguna.',details:['Gunakan project Supabase milikmu; konfigurasi disimpan hanya pada browser.','RLS membatasi setiap akun pada baris datanya sendiri.','Data cloud hanya diperbarui saat pengguna menekan tombol sinkronisasi.']},
+ {id:'auditlog',cat:'productivity',icon:'▤',name:'Audit Trail / Activity Log',desc:'Riwayat tindakan penting pada tiket dan inventaris untuk penelusuran troubleshooting.',details:['Mencatat waktu dan ringkasan perubahan pada browser ini.','Mendukung pencarian dan ekspor JSON untuk audit lokal.','Riwayat ini belum disinkronkan ke cloud; data disimpan lokal di browser ini.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -125,6 +126,21 @@ function tick(){document.getElementById('clock').textContent=new Date().toLocale
 
 const $=s=>document.querySelector(s),enc=new TextEncoder(),dec=new TextDecoder(),b64=u=>btoa(String.fromCharCode(...u)),ub64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),hex=u=>[...new Uint8Array(u)].map(x=>x.toString(16).padStart(2,'0')).join(''),mk=(r,h)=>{r.innerHTML=h;return s=>r.querySelector(s)},ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},sv=(k,v)=>{try{localStorage.setItem(k,typeof v=='string'?v:JSON.stringify(v))}catch{}};
 const copy=(t,b)=>{navigator.clipboard?.writeText(t).catch(()=>{});if(b){const o=b.textContent;b.textContent='Disalin ✓';setTimeout(()=>b.textContent=o,1200)}};
+const auditStorageKey='tq_audit_log_v1';
+function auditEvent(action,entity,details){
+ try{
+  const current=ls(auditStorageKey,[]),entries=Array.isArray(current)?current:[];
+  entries.unshift({
+   id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),
+   at:new Date().toISOString(),
+   action:String(action||'Aktivitas').slice(0,60),
+   entity:String(entity||'Umum').slice(0,40),
+   details:String(details||'').replace(/[\\r\\n\\t]+/g,' ').slice(0,500)
+  });
+  sv(auditStorageKey,entries.slice(0,500));
+ }catch(_){}
+}
+
 async function key(p,salt){const k=await crypto.subtle.importKey('raw',enc.encode(p),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function seal(t,p){const s=crypto.getRandomValues(new Uint8Array(16)),i=crypto.getRandomValues(new Uint8Array(12));return b64([...s,...i,...new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:i},await key(p,s),enc.encode(t)))])}
 async function unseal(t,p){const u=ub64(t);return dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(16,28)},await key(p,u.slice(0,16)),u.slice(28)))}
@@ -336,12 +352,35 @@ A.synccloud=r=>{
    sv('tq_asset_inventory_v1',assets.items);sv('tq_tickets',tickets.items);
    const snapshot={assets:assets.items,tickets:tickets.items,syncedAt:new Date().toISOString()};sv(baselineKey,snapshot);
    g('#sync-last').textContent='Terakhir berhasil: '+new Date(snapshot.syncedAt).toLocaleString('id-ID');
-   say('Sinkronisasi berhasil. Aset: '+assets.items.length+'; tiket: '+tickets.items.length+'; konflik memilih versi lokal: '+(assets.conflicts+tickets.conflicts)+'. Buka ulang modul agar tampilan membaca data terbaru.',false);
+   auditEvent('Sinkronisasi','Cloud','Aset '+assets.items.length+' · tiket '+tickets.items.length+' · konflik '+(assets.conflicts+tickets.conflicts));say('Sinkronisasi berhasil. Aset: '+assets.items.length+'; tiket: '+tickets.items.length+'; konflik memilih versi lokal: '+(assets.conflicts+tickets.conflicts)+'. Buka ulang modul agar tampilan membaca data terbaru.',false);
   }catch(e){say('Sinkronisasi gagal: '+(e.message||'kesalahan tidak diketahui')+'. Periksa login, schema.sql, konfigurasi, dan RLS.',true)}
   finally{await paintAccount()}
  };
  paintConfig();paintAccount();
 };
+A.audit=r=>{
+ const key='tq_audit_log_v1';
+ const g=mk(r,'<div class="small">Riwayat perubahan penting TermuxQ yang tercatat di browser ini. Menampilkan maksimal 500 aktivitas terakhir; tidak merekam password, key, atau isi rahasia.</div><div class="row" style="margin-top:10px"><input id="audit-search" placeholder="Cari tindakan, objek, atau detail…" style="flex:1;min-width:180px"><select id="audit-action" style="flex:1;min-width:150px"><option value="">Semua tindakan</option></select></div><div class="row"><button class="btn secondary" id="audit-refresh" type="button">Muat ulang</button><button class="btn" id="audit-export" type="button">Ekspor JSON</button></div><div class="out" id="audit-info" aria-live="polite">Memuat riwayat…</div><div id="audit-list"></div><div class="small" style="margin-top:10px">Catatan: riwayat ini khusus browser/perangkat ini. Sinkronisasi audit ke database bersama belum diaktifkan.</div>');
+ const read=()=>{const v=ls(key,[]);return Array.isArray(v)?v.filter(x=>x&&typeof x==='object'):[]};
+ const time=value=>{const n=Date.parse(value||'');return Number.isFinite(n)?new Date(n).toLocaleString('id-ID'):'Waktu tidak tersedia'};
+ const draw=()=>{
+  const entries=read(),q=g('#audit-search').value.trim().toLowerCase(),action=g('#audit-action').value;
+  const actions=[...new Set(entries.map(x=>String(x.action||'Aktivitas')))].sort((a,b)=>a.localeCompare(b,'id'));
+  const selected=action;
+  g('#audit-action').innerHTML='<option value="">Semua tindakan</option>'+actions.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+  if(actions.includes(selected))g('#audit-action').value=selected;
+  const shown=entries.filter(x=>(!selected||x.action===selected)&&[x.action,x.entity,x.details,x.at].some(v=>String(v||'').toLowerCase().includes(q))).slice(0,150);
+  g('#audit-info').textContent=entries.length+' aktivitas tersimpan · '+shown.length+' ditampilkan · batas 500 catatan terbaru';
+  g('#audit-list').innerHTML=shown.map(x=>'<article class="panel" style="padding:11px;margin-top:8px;box-shadow:none"><div class="row" style="justify-content:space-between;align-items:flex-start"><strong>'+esc(x.action||'Aktivitas')+'</strong><span class="mini-tag">'+esc(x.entity||'Umum')+'</span></div><div class="small" style="margin:5px 0">'+esc(time(x.at))+'</div><div style="overflow-wrap:anywhere;white-space:pre-wrap">'+esc(x.details||'Tidak ada detail')+'</div></article>').join('')||'<div class="out">Belum ada aktivitas yang cocok.</div>';
+ };
+ g('#audit-search').oninput=draw;g('#audit-action').onchange=draw;g('#audit-refresh').onclick=draw;
+ g('#audit-export').onclick=()=>{
+  const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),entries:read()},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-audit-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
+ draw();
+};
+
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');
  const run=async()=>{
@@ -357,6 +396,7 @@ A.check=r=>{
   add('IT Asset Inventory',typeof A.inventory==='function','Handler modul '+(typeof A.inventory==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Operations Overview',typeof A.opsdash==='function','Handler modul '+(typeof A.opsdash==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Cloud Sync (Supabase)',typeof A.synccloud==='function','Handler modul '+(typeof A.synccloud==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('Audit Trail / Activity Log',typeof A.audit==='function','Handler modul '+(typeof A.audit==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){
@@ -434,8 +474,8 @@ A.tickets=r=>{
    const linked=t.assetRef&&typeof t.assetRef.name==='string'?'<div class="small" style="margin:5px 0;color:var(--cyan)">Aset terkait: '+esc(assetLabel(t.assetRef))+'</div>':'';
    return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between"><strong>'+esc(t.title)+'</strong><span class="mini-tag">'+esc(t.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.device||'Perangkat tidak ditentukan')+' · '+esc(new Date(t.createdAt).toLocaleString('id-ID'))+'</div>'+linked+'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--text)">'+esc(t.description||'Tidak ada detail')+'</div><div class="row"><select data-status="'+esc(t.id)+'" aria-label="Status tiket" style="flex:1;min-width:120px">'+opt(statuses,t.status)+'</select><button class="btn" type="button" data-delete="'+esc(t.id)+'">Hapus</button></div></article>';
   }).join('')||'<div class="out">Tidak ada tiket yang sesuai.</div>';
-  g('#list').querySelectorAll('[data-status]').forEach(el=>el.onchange=()=>{const t=tickets.find(x=>x.id===el.dataset.status);if(t){t.status=el.value;save();draw()}});
-  g('#list').querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(!confirm('Hapus tiket ini?'))return;tickets=tickets.filter(x=>x.id!==el.dataset.delete);save();draw();g('#message').textContent='Tiket dihapus.'});
+  g('#list').querySelectorAll('[data-status]').forEach(el=>el.onchange=()=>{const t=tickets.find(x=>x.id===el.dataset.status);if(t){const previous=t.status,next=el.value;t.status=next;save();auditEvent('Ubah status','Tiket',t.title+' · '+previous+' → '+next);draw()}});
+  g('#list').querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(!confirm('Hapus tiket ini?'))return;const removed=tickets.find(x=>x.id===el.dataset.delete);if(removed)auditEvent('Hapus','Tiket',removed.title);tickets=tickets.filter(x=>x.id!==el.dataset.delete);save();draw();g('#message').textContent='Tiket dihapus.'});
  };
  g('#ticket-form').onsubmit=e=>{
   e.preventDefault();const title=g('#title').value.trim();
@@ -444,10 +484,10 @@ A.tickets=r=>{
   const asset=selectedAsset(),chosen=g('#asset-link').value;
   if(chosen&&!asset){g('#message').textContent='Aset pilihan tidak ditemukan lagi. Segarkan daftar aset atau pilih kembali.';refreshAssetOptions();return}
   const ticket={id:idNew(),title:title,device:g('#device').value.trim(),assetRef:assetRefFor(asset),priority:g('#priority').value,description:g('#description').value.trim(),status:'Open',createdAt:new Date().toISOString()};
-  tickets.unshift(ticket);save();g('#ticket-form').reset();refreshAssetOptions();draw();g('#message').textContent=asset?'Tiket dibuat dan dikaitkan dengan '+asset.name+'.':'Tiket dibuat dan disimpan pada browser ini.';
+  tickets.unshift(ticket);save();auditEvent('Buat','Tiket',ticket.title+(asset?' · '+asset.name:''));g('#ticket-form').reset();refreshAssetOptions();draw();g('#message').textContent=asset?'Tiket dibuat dan dikaitkan dengan '+asset.name+'.':'Tiket dibuat dan disimpan pada browser ini.';
  };
  g('#q').oninput=draw;g('#filter').onchange=draw;
- g('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schemaVersion:2,exportedAt:new Date().toISOString(),tickets:tickets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-tickets-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);g('#message').textContent='Ekspor JSON disiapkan.'};
+ g('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schemaVersion:2,exportedAt:new Date().toISOString(),tickets:tickets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-tickets-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor JSON','Tiket',tickets.length+' tiket diekspor');g('#message').textContent='Ekspor JSON disiapkan.'};
  g('#import').onchange=async()=>{
   const file=g('#import').files[0];if(!file)return;
   try{
@@ -461,7 +501,7 @@ A.tickets=r=>{
     tickets.push({id:id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt:!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString()});
     known.add(id);added++;if(tickets.length>=500)break;
    }
-   save();draw();g('#message').textContent='Impor selesai: '+added+' tiket baru.';
+   save();draw();if(added)auditEvent('Impor JSON','Tiket',added+' tiket ditambahkan');g('#message').textContent='Impor selesai: '+added+' tiket baru.';
   }catch(err){g('#message').textContent='Impor gagal: '+err.message}
   finally{g('#import').value=''}
  };
@@ -596,8 +636,8 @@ A.inventory=r=>{
    const d=devices.find(x=>x.id===button.dataset.assetPing);if(!d)return;
    if(!await ensureAgent())return;
    button.disabled=true;message('Memeriksa '+d.name+' ('+d.ip+')…');
-   try{await doPing(d);save();draw();message('Pemeriksaan selesai untuk '+d.name+'.')}
-   catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();save();draw();message('Ping gagal: '+e.message)}
+   try{await doPing(d);save();auditEvent('Ping perangkat','Aset',d.name+' · '+d.ip+' · '+d.status);draw();message('Pemeriksaan selesai untuk '+d.name+'.')}
+   catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();save();auditEvent('Ping gagal','Aset',d.name+' · '+d.ip+' · '+e.message);draw();message('Ping gagal: '+e.message)}
   });
   r.querySelectorAll('[data-asset-edit]').forEach(button=>button.onclick=()=>{
    const d=devices.find(x=>x.id===button.dataset.assetEdit);if(!d)return;
@@ -607,7 +647,7 @@ A.inventory=r=>{
   r.querySelectorAll('[data-asset-delete]').forEach(button=>button.onclick=()=>{
    const d=devices.find(x=>x.id===button.dataset.assetDelete);if(!d)return;
    if(!confirm('Hapus perangkat "'+d.name+'" dari inventaris lokal?'))return;
-   devices=devices.filter(x=>x.id!==d.id);save();draw();message('Perangkat dihapus.');
+   auditEvent('Hapus','Aset',d.name+' · '+d.ip);devices=devices.filter(x=>x.id!==d.id);save();draw();message('Perangkat dihapus.');
   });
  };
  const resetForm=()=>{
@@ -638,13 +678,13 @@ A.inventory=r=>{
   if(!existing&&devices.length>=500){message('Batas 500 perangkat. Ekspor inventaris sebelum mengarsipkan data lama.');return}
   const item={id:id||(idNew()),name:name.slice(0,100),zone:zone.slice(0,60),ip:ip,type:allowedTypes.includes(type)?type:'Other',notes:notes.slice(0,500),status:existing&&allowedStatuses.includes(existing.status)?existing.status:'Belum dicek',latencyMs:existing&&Number.isFinite(existing.latencyMs)?existing.latencyMs:null,lastCheckedAt:existing?existing.lastCheckedAt||null:null,lastMessage:existing?existing.lastMessage||'':'',createdAt:existing?existing.createdAt||new Date().toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()};
   if(existing)devices=devices.map(d=>d.id===id?item:d);else devices.unshift(item);
-  save();resetForm();draw();message(existing?'Perangkat diperbarui.':'Perangkat ditambahkan.');
+  save();auditEvent(existing?'Edit':'Tambah', 'Aset',item.name+' · '+item.ip+(item.zone?' · '+item.zone:''));resetForm();draw();message(existing?'Perangkat diperbarui.':'Perangkat ditambahkan.');
  };
  g('#inv-cancel').onclick=()=>{resetForm();message('Edit dibatalkan.')};
  g('#inv-search').oninput=draw;g('#inv-zone-filter').onchange=draw;
  g('#inv-export').onclick=()=>{
   const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),devices:devices},null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-inventory-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Ekspor JSON disiapkan.');
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-inventory-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor JSON','Aset',devices.length+' aset diekspor');message('Ekspor JSON disiapkan.');
  };
  g('#inv-import').onchange=async()=>{
   const file=g('#inv-import').files[0];if(!file)return;
@@ -660,7 +700,7 @@ A.inventory=r=>{
     devices.push({id,name:x.name.trim().slice(0,100),zone:String(x.zone||'').slice(0,60),ip,type:allowedTypes.includes(x.type)?x.type:'Other',notes:String(x.notes||'').slice(0,500),status,latencyMs:Number.isFinite(x.latencyMs)?x.latencyMs:null,lastCheckedAt:x.lastCheckedAt&&!Number.isNaN(Date.parse(x.lastCheckedAt))?new Date(x.lastCheckedAt).toISOString():null,lastMessage:String(x.lastMessage||'').slice(0,200),createdAt:x.createdAt&&!Number.isNaN(Date.parse(x.createdAt))?new Date(x.createdAt).toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()});
     ips.add(ip);ids.add(id);added++;
    }
-   save();draw();message('Impor selesai: '+added+' perangkat ditambahkan, '+skipped+' dilewati (data tidak valid/duplikat/batas kapasitas).');
+   save();draw();if(added)auditEvent('Impor JSON','Aset',added+' aset ditambahkan; '+skipped+' dilewati');message('Impor selesai: '+added+' perangkat ditambahkan, '+skipped+' dilewati (data tidak valid/duplikat/batas kapasitas).');
   }catch(e){message('Impor gagal: '+e.message)}
   finally{g('#inv-import').value=''}
  };
@@ -679,7 +719,7 @@ A.inventory=r=>{
     done++;g('#inv-info').textContent='Pemeriksaan '+done+'/'+targets.length+' · online '+online+' · error '+errors;
    }
   };
-  try{await Promise.all(Array.from({length:Math.min(3,targets.length)},()=>worker()));save();draw();message('Selesai: '+online+' online, '+(targets.length-online-errors)+' tidak menjawab, '+errors+' error.');act('▣','Inventaris diperiksa',online+' dari '+targets.length+' perangkat online.')}
+  try{await Promise.all(Array.from({length:Math.min(3,targets.length)},()=>worker()));save();auditEvent('Ping batch','Aset',targets.length+' perangkat diperiksa · '+online+' online · '+(targets.length-online-errors)+' No Reply · '+errors+' error');draw();message('Selesai: '+online+' online, '+(targets.length-online-errors)+' tidak menjawab, '+errors+' error.');act('▣','Inventaris diperiksa',online+' dari '+targets.length+' perangkat online.')}
   finally{button.disabled=false;button.textContent='Ping tampil (maks. 24)'}
  };
  if(devices.length>500)devices=devices.slice(0,500);

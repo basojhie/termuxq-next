@@ -358,7 +358,7 @@ A.synccloud=r=>{
  };
  paintConfig();paintAccount();
 };
-A.audit=r=>{
+A.auditlog=r=>{
  const key='tq_audit_log_v1';
  const g=mk(r,'<div class="small">Riwayat perubahan penting TermuxQ yang tercatat di browser ini. Menampilkan maksimal 500 aktivitas terakhir; tidak merekam password, key, atau isi rahasia.</div><div class="row" style="margin-top:10px"><input id="audit-search" placeholder="Cari tindakan, objek, atau detail…" style="flex:1;min-width:180px"><select id="audit-action" style="flex:1;min-width:150px"><option value="">Semua tindakan</option></select></div><div class="row"><button class="btn secondary" id="audit-refresh" type="button">Muat ulang</button><button class="btn" id="audit-export" type="button">Ekspor JSON</button></div><div class="out" id="audit-info" aria-live="polite">Memuat riwayat…</div><div id="audit-list"></div><div class="small" style="margin-top:10px">Catatan: riwayat ini khusus browser/perangkat ini. Sinkronisasi audit ke database bersama belum diaktifkan.</div>');
  const read=()=>{const v=ls(key,[]);return Array.isArray(v)?v.filter(x=>x&&typeof x==='object'):[]};
@@ -396,7 +396,7 @@ A.check=r=>{
   add('IT Asset Inventory',typeof A.inventory==='function','Handler modul '+(typeof A.inventory==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Operations Overview',typeof A.opsdash==='function','Handler modul '+(typeof A.opsdash==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Cloud Sync (Supabase)',typeof A.synccloud==='function','Handler modul '+(typeof A.synccloud==='function'?'terdaftar.':'tidak ditemukan.'));
-  add('Audit Trail / Activity Log',typeof A.audit==='function','Handler modul '+(typeof A.audit==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('Audit Trail / Activity Log',typeof A.auditlog==='function','Handler modul '+(typeof A.auditlog==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){

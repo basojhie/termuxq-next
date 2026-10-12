@@ -2,12 +2,12 @@
 set -Eeuo pipefail
 
 REPO_URL="https://github.com/basojhie/termuxq-next.git"
-TARGET_DIR="\${TERMUXQ_DIR:-$HOME/termuxq-next}"
+TARGET_DIR="${TERMUXQ_DIR:-$HOME/termuxq-next}"
 BACKUP_ROOT="$HOME/.termuxq-backups"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 SAVED_DIR=""
 
-if [[ -z "\${HOME:-}" || "$TARGET_DIR" == "/" || "$TARGET_DIR" == "$HOME" || -z "$TARGET_DIR" ]]; then
+if [[ -z "${HOME:-}" || "$TARGET_DIR" == "/" || "$TARGET_DIR" == "$HOME" || -z "$TARGET_DIR" ]]; then
   echo "[ERROR] TERMUXQ_DIR mengarah ke lokasi yang tidak aman: $TARGET_DIR" >&2
   exit 2
 fi
@@ -26,7 +26,7 @@ mkdir -p "$(dirname "$TARGET_DIR")" "$BACKUP_ROOT"
 
 make_backup() {
   local source_dir="$1"
-  local archive="$BACKUP_ROOT/termuxq_$(basename "$TARGET_DIR")_\${STAMP}.tar.gz"
+  local archive="$BACKUP_ROOT/termuxq_$(basename "$TARGET_DIR")_${STAMP}.tar.gz"
   echo "[INFO] Membuat cadangan file lokal..." >&2
   tar -czf "$archive" --exclude=.git -C "$source_dir" .
   echo "$archive"
@@ -70,7 +70,7 @@ else
       exit 3
     fi
     BACKUP="$(make_backup "$TARGET_DIR")"
-    SAVED_DIR="\${TARGET_DIR}.backup.\${STAMP}"
+    SAVED_DIR="${TARGET_DIR}.backup.${STAMP}"
     mv "$TARGET_DIR" "$SAVED_DIR"
     echo "[INFO] Folder lama disimpan sebagai: $SAVED_DIR"
     echo "[INFO] Arsip cadangan: $BACKUP"

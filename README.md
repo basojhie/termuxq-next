@@ -68,3 +68,12 @@ Jalankan dashboard serta agent lokal dengan instruksi di atas, lalu buka **Netwo
 
 ### Diagnosis Agent versi lama
 Endpoint /stats mengembalikan agent_version dan features. Dashboard menggunakan metadata ini untuk memeriksa dukungan private_lan_ping. Jika Agent lama masih terhubung, modul LAN memberi petunjuk untuk mengganti termuxq_agent.py lalu menjalankannya ulang, bukan sekadar menampilkan NetworkError.
+
+
+## Otomatis memperbarui dan menjalankan Agent di Windows
+1. Simpan file **UPDATE_AND_START_TERMUXQ_AGENT.bat** ke folder tempat termuxq_agent.py yang biasa digunakan berada.
+2. Klik dua kali file .bat. Script mengunduh updater terbaru, mengunduh dan memeriksa Agent resmi, membuat cadangan ke %LOCALAPPDATA%\TermuxQ\agent-backups, lalu mengganti dan menjalankan Agent.
+3. Script hanya menghentikan proses yang memakai port 8765 jika nama proses dan baris perintahnya cocok dengan termuxq_agent.py. Jika port digunakan program lain, script berhenti tanpa menghentikan program tersebut.
+4. Jika muncul **BERHASIL**, segarkan browser dengan Ctrl+F5, buka LAN Device Monitor, lalu coba lagi.
+
+Script membutuhkan Windows PowerShell dan Python 3 yang dapat dipanggil lewat python atau py. Perbarui hanya dari repository resmi milik proyek. File Agent lama dicadangkan sebelum diganti.

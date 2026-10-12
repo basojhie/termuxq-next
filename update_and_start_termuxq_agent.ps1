@@ -16,14 +16,9 @@ try {
     if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
         $TargetDirectory = $PSScriptRoot
     }
-    $TargetDirectory = $TargetDirectory.Trim()
-    if ($TargetDirectory.Length -ge 2) {
-        $first = $TargetDirectory[0]
-        $last = $TargetDirectory[$TargetDirectory.Length - 1]
-        if (($first -eq '"' -and $last -eq '"') -or ($first -eq "'" -and $last -eq "'")) {
-            $TargetDirectory = $TargetDirectory.Substring(1, $TargetDirectory.Length - 2).Trim()
-        }
-    }
+    # Strip quote characters independently: Windows command-line parsing can
+    # leave only the trailing quote when the argument ends in a backslash.
+    $TargetDirectory = $TargetDirectory.Trim().Trim([char[]]@(34, 39)).Trim()
 
     if ([string]::IsNullOrWhiteSpace($TargetDirectory)) {
         throw 'Folder tujuan kosong. Masukkan folder tempat termuxq_agent.py berada.'
@@ -84,18 +79,18 @@ try {
     # Stop only a listener whose process is clearly the TermuxQ Python Agent.
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique)
-    foreach ($listenerPid in $listeners) {
-        if (-not $listenerPid -or $listenerPid -le 0) { continue }
-        $processInfo = Get-CimInstance Win32_Process -Filter ('ProcessId = ' + [int]$listenerPid) -ErrorAction SilentlyContinue
+    foreach ($listenerProcessId in $listeners) {
+        if (-not $listenerProcessId -or $listenerProcessId -le 0) { continue }
+        $processInfo = Get-CimInstance Win32_Process -Filter ('ProcessId = ' + [int]$listenerProcessId) -ErrorAction SilentlyContinue
         if (-not $processInfo) { continue }
         $isPython = $processInfo.Name -match '(?i)^(python|pythonw|py|python3(?:\.\d+)?)\.exe$'
         $isTermuxQ = $processInfo.CommandLine -match '(?i)termuxq_agent\.py'
         if ($isPython -and $isTermuxQ) {
-            Stop-Process -Id ([int]$listenerPid) -Force
+            Stop-Process -Id ([int]$listenerProcessId) -Force
             Start-Sleep -Milliseconds 800
-            Write-Host ('Agent lama dihentikan (PID ' + $listenerPid + ').') -ForegroundColor DarkGray
+            Write-Host ('Agent lama dihentikan (PID ' + $listenerProcessId + ').') -ForegroundColor DarkGray
         } else {
-            throw ('Port ' + $Port + ' sedang dipakai proses lain (PID ' + $listenerPid + ', ' + $processInfo.Name + '). Tidak dihentikan demi keamanan.')
+            throw ('Port ' + $Port + ' sedang dipakai proses lain (PID ' + $listenerProcessId + ', ' + $processInfo.Name + '). Tidak dihentikan demi keamanan.')
         }
     }
 

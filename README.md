@@ -81,3 +81,6 @@ Script membutuhkan Windows PowerShell dan Python 3 yang dapat dipanggil lewat py
 
 ### Perbaikan ZIP updater Windows
 Jika versi lama menampilkan "Illegal characters in path" ketika membersihkan file sementara, gunakan ZIP terbaru. Script baru membersihkan tanda kutip di awal/akhir path, mengubah path file agent menjadi folder induknya jika perlu, dan tidak lagi menggunakan Test-Path pada blok pembersihan error sehingga pesan error awal tidak tertimpa. Ketika diminta, masukkan folder yang berisi termuxq_agent.py, bukan nama file .ps1 atau .bat.
+
+
+Pembaruan path Windows (versi terbaru): launcher menormalisasi folder target tanpa garis miring terbalik penutup sebelum meneruskan argumen ke PowerShell. Updater juga membersihkan tanda kutip di tepi path dan menggunakan nama variabel proses yang tidak bentrok dengan variabel otomatis PowerShell `$PID`.

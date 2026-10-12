@@ -4,25 +4,22 @@ chcp 65001 >nul
 title TermuxQ Agent Auto Update
 
 set "SCRIPT_DIR=%~dp0"
-rem SCRIPT_DIR ends in a backslash; add only a dot so PowerShell receives a clean folder path.
+rem SCRIPT_DIR ends with a backslash; adding a dot normalizes it without leaving a trailing slash.
 for %%I in ("%SCRIPT_DIR%.") do set "TARGET_DIR=%%~fI"
 set "PS1=%TARGET_DIR%\update_and_start_termuxq_agent.ps1"
 
 if not exist "%PS1%" (
   echo GAGAL: File update_and_start_termuxq_agent.ps1 tidak ditemukan.
-  echo Ekstrak semua file ZIP ke satu folder yang sama.
+  echo Ekstrak seluruh file ZIP ke satu folder yang sama.
   pause
   exit /b 1
 )
 
-if not exist "%TARGET_DIR%\termuxq_agent.py" call :AskAgentFolder
-if errorlevel 1 (
-  echo.
-  echo Proses dibatalkan atau folder agent tidak valid.
-  pause
-  exit /b 1
-)
+if exist "%TARGET_DIR%\termuxq_agent.py" goto :RunUpdater
+call :AskAgentFolder
+if errorlevel 1 goto :FolderFailed
 
+:RunUpdater
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -TargetDirectory "%TARGET_DIR%"
 set "TQ_RC=%ERRORLEVEL%"
 if not "%TQ_RC%"=="0" (
@@ -35,6 +32,12 @@ if not "%TQ_RC%"=="0" (
   pause
 )
 exit /b %TQ_RC%
+
+:FolderFailed
+echo.
+echo GAGAL: Folder agent tidak valid atau proses dibatalkan.
+pause
+exit /b 1
 
 :AskAgentFolder
 echo.

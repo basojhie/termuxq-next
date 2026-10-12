@@ -87,3 +87,6 @@ Pembaruan path Windows (versi terbaru): launcher menormalisasi folder target tan
 
 
 Pembaruan otomatis Windows versi terbaru memisahkan prompt lokasi Agent ke subroutine batch, sehingga input folder tidak tertimpa oleh ekspansi variabel lama. Launcher juga menormalkan folder target sebelum memanggil PowerShell agar tanda kutip penutup tidak melekat pada path.
+
+
+Perbaikan lanjutan: jika ZIP diekstrak terpisah dari folder proyek, launcher meminta lokasi folder Agent melalui subroutine tersendiri agar input yang diketik tidak tergantikan oleh nilai variabel lama.

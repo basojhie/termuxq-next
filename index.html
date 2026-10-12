@@ -106,7 +106,8 @@ modules.push(
  {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal serta kaitkan dengan aset.',details:['Data tiket disimpan di localStorage browser ini.','Pilih perangkat dari IT Asset Inventory untuk menyimpan snapshot nama/IP pada tiket.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
  {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']},
  {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']},
- {id:'opsdash',cat:'dashboard',icon:'▥',name:'IT Operations Overview',desc:'Ringkasan inventaris, status koneksi terakhir, serta tiket IT Support.',details:['Membaca data lokal dari IT Asset Inventory dan IT Support Ticket Log.','Status koneksi menggunakan hasil ping terakhir; dashboard tidak otomatis melakukan ping.','Data tetap berada di browser ini sampai sinkronisasi bersama diterapkan.']}
+ {id:'opsdash',cat:'dashboard',icon:'▥',name:'IT Operations Overview',desc:'Ringkasan inventaris, status koneksi terakhir, serta tiket IT Support.',details:['Membaca data lokal dari IT Asset Inventory dan IT Support Ticket Log.','Status koneksi menggunakan hasil ping terakhir; dashboard tidak otomatis melakukan ping.','Data tetap berada di browser ini sampai sinkronisasi bersama diterapkan.']},
+ {id:'synccloud',cat:'dashboard',icon:'⇄',name:'Cloud Sync (Supabase)',desc:'Sinkronkan tiket dan inventaris ke database bersama dengan login pengguna.',details:['Gunakan project Supabase milikmu; konfigurasi disimpan hanya pada browser.','RLS membatasi setiap akun pada baris datanya sendiri.','Data cloud hanya diperbarui saat pengguna menekan tombol sinkronisasi.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -228,6 +229,119 @@ A.opsdash=r=>{
  draw();
 };
 
+A.synccloud=r=>{
+ const configKey='tq_sync_config_v1',baselineKey='tq_sync_baseline_v1',sdkUrl='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+ const g=mk(r,'<div class="small">Sinkronisasi manual antara browser melalui Supabase. Data hanya dikirim saat kamu menekan Sinkronkan sekarang.</div><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><strong>1. Konfigurasi project</strong><label for="sync-url">Project URL Supabase</label><input id="sync-url" type="url" placeholder="https://project-ref.supabase.co" autocomplete="url"><label for="sync-key">Publishable key / anon key (bukan service_role)</label><input id="sync-key" type="password" spellcheck="false" placeholder="sb_publishable_… atau anon key" autocomplete="off"><div class="row"><button class="btn secondary" id="sync-save-config" type="button">Simpan konfigurasi</button></div></section><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><strong>2. Akun Supabase</strong><label for="sync-email">Email</label><input id="sync-email" type="email" placeholder="akun-it@example.com" autocomplete="username"><label for="sync-password">Password</label><input id="sync-password" type="password" placeholder="Password akun Supabase" autocomplete="current-password"><div class="row"><button class="btn" id="sync-login" type="button">Login</button><button class="btn secondary" id="sync-signup" type="button">Buat akun</button><button class="btn secondary" id="sync-logout" type="button">Logout</button></div><div class="small" id="sync-account" aria-live="polite">Belum login.</div></section><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><div class="row" style="justify-content:space-between;align-items:center"><strong>3. Sinkronisasi</strong><button class="btn" id="sync-now" type="button" disabled>Sinkronkan sekarang</button></div><div class="out" id="sync-status" aria-live="polite" style="margin-top:8px">Simpan konfigurasi, lalu login. Jalankan supabase/schema.sql di project sebelum sinkronisasi.</div><div class="small" id="sync-last"></div></section><div class="out" style="margin-top:10px">Panduan: jalankan supabase/schema.sql di SQL Editor; gunakan Project URL serta publishable/anon key. Pakai akun yang sama pada perangkat resmi. Jangan pernah menaruh service_role atau secret key dalam website publik. Perubahan yang bertabrakan pada item yang sama memilih versi lokal perangkat yang sedang disinkronkan.</div>');
+ let client=null,clientSignature='',sdkPromise=null;
+ const say=(text,isError)=>{g('#sync-status').textContent=text;g('#sync-status').style.borderColor=isError?'var(--danger, #d44)':''};
+ const readConfig=()=>ls(configKey,{});
+ const validateConfig=()=>{
+  const url=g('#sync-url').value.trim(),keyValue=g('#sync-key').value.trim();
+  if(!url||!keyValue)throw new Error('Isi Project URL dan publishable/anon key terlebih dahulu.');
+  let parsed;try{parsed=new URL(url)}catch{throw new Error('Project URL tidak valid.')}
+  if(parsed.protocol!=='https:'||parsed.username||parsed.password||(parsed.pathname!=='/'&&parsed.pathname!==''))throw new Error('Gunakan Project URL HTTPS dari Supabase, tanpa path atau password di URL.');
+  if(keyValue.length>500)throw new Error('Key terlalu panjang.');
+  return {url:parsed.origin,key:keyValue};
+ };
+ const ensureSDK=()=>{
+  if(window.supabase&&typeof window.supabase.createClient==='function')return Promise.resolve();
+  if(!sdkPromise)sdkPromise=new Promise((resolve,reject)=>{
+   const script=document.createElement('script');script.src=sdkUrl;script.async=true;
+   script.onload=()=>window.supabase&&typeof window.supabase.createClient==='function'?resolve():reject(new Error('Supabase SDK tidak tersedia dari CDN.'));
+   script.onerror=()=>reject(new Error('Gagal memuat Supabase SDK. Periksa koneksi internet atau kebijakan CDN.'));
+   document.head.appendChild(script);
+  });
+  return sdkPromise;
+ };
+ const getClient=async()=>{
+  const c=readConfig();if(!c||typeof c.url!=='string'||!c.url.startsWith('https://')||!c.key)throw new Error('Simpan konfigurasi Supabase yang valid terlebih dahulu.');
+  await ensureSDK();const signature=c.url+'|'+c.key;
+  if(!client||signature!==clientSignature){client=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});clientSignature=signature}
+  return client;
+ };
+ const stable=value=>{
+  if(value===null||typeof value!=='object')return JSON.stringify(value);
+  if(Array.isArray(value))return '['+value.map(stable).join(',')+']';
+  return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+stable(value[k])).join(',')+'}';
+ };
+ const same=(a,b)=>(a==null&&b==null)||(a!=null&&b!=null&&stable(a)===stable(b));
+ const idMap=items=>new Map((Array.isArray(items)?items:[]).filter(x=>x&&typeof x.id==='string'&&x.id.length>0).map(x=>[x.id,x]));
+ const mergeKind=(kind,local,cloudRows,baseline,userId)=>{
+  const localMap=idMap(local),baseMap=idMap(baseline),remoteMap=new Map();
+  for(const row of cloudRows.filter(x=>x&&x.record_type===kind&&typeof x.record_id==='string'))remoteMap.set(row.record_id,row.is_deleted?null:(row.payload&&typeof row.payload==='object'?row.payload:null));
+  const ids=new Set([...localMap.keys(),...baseMap.keys(),...remoteMap.keys()]),merged=new Map();let conflicts=0;
+  for(const id of ids){
+   const l=localMap.has(id)?localMap.get(id):null,b=baseMap.has(id)?baseMap.get(id):null,rr=remoteMap.has(id)?remoteMap.get(id):null;let winner;
+   if(same(l,b)&&!same(rr,b))winner=rr;else if(same(rr,b)&&!same(l,b))winner=l;else if(same(l,rr))winner=l;else if(same(l,b)&&same(rr,b))winner=l;else{winner=l;conflicts++}
+   if(winner)merged.set(id,winner);
+  }
+  const rows=[...ids].map(id=>({user_id:userId,record_type:kind,record_id:id,payload:merged.has(id)?merged.get(id):null,is_deleted:!merged.has(id)}));
+  return {items:[...merged.values()],rows,conflicts};
+ };
+ const paintAccount=async()=>{
+  if(!readConfig().url){g('#sync-account').textContent='Belum dikonfigurasi atau login.';g('#sync-now').disabled=true;g('#sync-logout').disabled=true;return}
+  try{const c=await getClient(),result=await c.auth.getSession(),session=result.data&&result.data.session;
+   g('#sync-account').textContent=session?'Login sebagai '+(session.user.email||session.user.id):'Belum login.';g('#sync-now').disabled=!session;g('#sync-logout').disabled=!session;
+  }catch(e){g('#sync-account').textContent='SDK / sesi belum tersedia: '+e.message;g('#sync-now').disabled=true;g('#sync-logout').disabled=true}
+ };
+ const paintConfig=()=>{
+  const c=readConfig();if(c&&c.url)g('#sync-url').value=c.url;if(c&&c.key)g('#sync-key').value=c.key;
+  const last=ls(baselineKey,null);g('#sync-last').textContent=last&&last.syncedAt?'Terakhir berhasil: '+new Date(last.syncedAt).toLocaleString('id-ID'):'Belum ada sinkronisasi pada browser ini.';
+ };
+ const saveConfig=()=>{
+  const c=validateConfig();sv(configKey,c);if(clientSignature!==c.url+'|'+c.key){client=null;clientSignature=''}
+  say('Konfigurasi disimpan pada browser ini. Login dengan akun Supabase berikutnya.',false);
+ };
+ g('#sync-save-config').onclick=()=>{try{saveConfig();paintAccount()}catch(e){say(e.message,true)}};
+ g('#sync-login').onclick=async()=>{
+  const button=g('#sync-login');button.disabled=true;
+  try{saveConfig();const email=g('#sync-email').value.trim(),password=g('#sync-password').value;if(!email||!password)throw new Error('Isi email dan password akun Supabase.');
+   say('Login…',false);const c=await getClient(),result=await c.auth.signInWithPassword({email,password});if(result.error)throw result.error;
+   g('#sync-password').value='';await paintAccount();say('Login berhasil. Tekan Sinkronkan sekarang untuk menggabungkan data cloud.',false);
+  }catch(e){say('Login gagal: '+(e.message||'periksa konfigurasi dan akun.'),true)}
+  finally{button.disabled=false}
+ };
+ g('#sync-signup').onclick=async()=>{
+  const button=g('#sync-signup');button.disabled=true;
+  try{saveConfig();const email=g('#sync-email').value.trim(),password=g('#sync-password').value;if(!email||!password)throw new Error('Isi email dan password untuk membuat akun.');if(password.length<8)throw new Error('Gunakan password minimal 8 karakter.');
+   say('Membuat akun…',false);const c=await getClient(),result=await c.auth.signUp({email,password});if(result.error)throw result.error;
+   g('#sync-password').value='';
+   if(result.data&&result.data.session){await paintAccount();say('Akun dibuat dan login berhasil. Kamu bisa mulai sinkronisasi.',false)}
+   else say('Pendaftaran dikirim. Jika email confirmation aktif, konfirmasi email dahulu lalu login.',false);
+  }catch(e){say('Pendaftaran gagal: '+(e.message||'periksa konfigurasi.'),true)}
+  finally{button.disabled=false}
+ };
+ g('#sync-logout').onclick=async()=>{
+  try{const c=await getClient(),result=await c.auth.signOut();if(result.error)throw result.error;say('Logout dari browser ini. Data lokal dan cloud tidak dihapus.',false)}
+  catch(e){say('Logout gagal: '+e.message,true)}
+  await paintAccount();
+ };
+ g('#sync-now').onclick=async()=>{
+  const button=g('#sync-now');button.disabled=true;
+  try{
+   const c=await getClient(),auth=await c.auth.getSession();if(auth.error)throw auth.error;
+   const session=auth.data&&auth.data.session;if(!session||!session.user)throw new Error('Login terlebih dahulu dengan akun Supabase.');
+   const userId=session.user.id;say('Membaca database bersama…',false);
+   let all=[];const pageSize=1000;
+   for(let start=0;start<50000;start+=pageSize){
+    const query=await c.from('termuxq_records').select('record_type,record_id,payload,is_deleted').eq('user_id',userId).order('record_type',{ascending:true}).order('record_id',{ascending:true}).range(start,start+pageSize-1);
+    if(query.error)throw query.error;if(!Array.isArray(query.data))throw new Error('Database tidak mengembalikan daftar record. Pastikan supabase/schema.sql sudah dijalankan.');
+    all.push(...query.data);if(query.data.length<pageSize)break;if(start+pageSize>=50000)throw new Error('Jumlah record melebihi batas keamanan 50.000.');
+   }
+   const localAssets=ls('tq_asset_inventory_v1',[]),localTickets=ls('tq_tickets',[]),baseline=ls(baselineKey,{assets:[],tickets:[]});
+   const assets=mergeKind('asset',Array.isArray(localAssets)?localAssets:[],all,Array.isArray(baseline.assets)?baseline.assets:[],userId);
+   const tickets=mergeKind('ticket',Array.isArray(localTickets)?localTickets:[],all,Array.isArray(baseline.tickets)?baseline.tickets:[],userId);
+   const rows=assets.rows.concat(tickets.rows),batchSize=150;say('Menggabungkan '+assets.items.length+' aset dan '+tickets.items.length+' tiket…',false);
+   for(let i=0;i<rows.length;i+=batchSize){const result=await c.from('termuxq_records').upsert(rows.slice(i,i+batchSize),{onConflict:'user_id,record_type,record_id'});if(result.error)throw result.error}
+   sv('tq_asset_inventory_v1',assets.items);sv('tq_tickets',tickets.items);
+   const snapshot={assets:assets.items,tickets:tickets.items,syncedAt:new Date().toISOString()};sv(baselineKey,snapshot);
+   g('#sync-last').textContent='Terakhir berhasil: '+new Date(snapshot.syncedAt).toLocaleString('id-ID');
+   say('Sinkronisasi berhasil. Aset: '+assets.items.length+'; tiket: '+tickets.items.length+'; konflik memilih versi lokal: '+(assets.conflicts+tickets.conflicts)+'. Buka ulang modul agar tampilan membaca data terbaru.',false);
+  }catch(e){say('Sinkronisasi gagal: '+(e.message||'kesalahan tidak diketahui')+'. Periksa login, schema.sql, konfigurasi, dan RLS.',true)}
+  finally{await paintAccount()}
+ };
+ paintConfig();paintAccount();
+};
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');
  const run=async()=>{
@@ -242,6 +356,7 @@ A.check=r=>{
   add('IT Support Ticket Log',typeof A.tickets==='function','Handler modul '+(typeof A.tickets==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Asset Inventory',typeof A.inventory==='function','Handler modul '+(typeof A.inventory==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Operations Overview',typeof A.opsdash==='function','Handler modul '+(typeof A.opsdash==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('Cloud Sync (Supabase)',typeof A.synccloud==='function','Handler modul '+(typeof A.synccloud==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){

@@ -135,6 +135,38 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #ops-refresh').click();
     await page.locator('#modal-close').click();
 
+    // Cloud Sync module: Supabase SDK auth and database calls are isolated with a deterministic browser stub.
+    await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', route => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: "window.__syncMock={session:null,remote:[],uploaded:[]};\nwindow.supabase={createClient:function(){\n const mock=window.__syncMock;\n return {auth:{\n  getSession:async()=>({data:{session:mock.session},error:null}),\n  signInWithPassword:async({email,password})=>{if(!email||!password)return {data:{session:null},error:{message:'missing login'}};mock.session={access_token:'mock-session',user:{id:'11111111-2222-4333-8444-555555555555',email}};return {data:{session:mock.session,user:mock.session.user},error:null}},\n  signUp:async({email})=>({data:{session:null,user:{email}},error:null}),\n  signOut:async()=>{mock.session=null;return {error:null}}\n },from:function(){\n  const builder={select:function(){return this},eq:function(){return this},order:function(){return this},\n   range:async function(start,end){return {data:mock.remote.slice(start,end+1),error:null}},\n   upsert:async function(rows){mock.uploaded.push(...rows);for(const row of rows){const i=mock.remote.findIndex(x=>x.user_id===row.user_id&&x.record_type===row.record_type&&x.record_id===row.record_id);if(i<0)mock.remote.push(row);else mock.remote[i]=row}return {data:null,error:null}}\n  };return builder\n }};\n};"
+    }));
+    await page.evaluate(() => {
+      localStorage.setItem('tq_asset_inventory_v1', JSON.stringify([
+        {id:'sync-asset-qa',name:'Sync QA PC',ip:'192.168.2.20',zone:'Zona QA',type:'PC',status:'Online'}
+      ]));
+      localStorage.setItem('tq_tickets', JSON.stringify([
+        {id:'sync-ticket-qa',title:'Sync QA Ticket',device:'Sync QA PC',priority:'High',status:'Open',createdAt:new Date().toISOString()}
+      ]));
+    });
+    await page.locator('[data-module="synccloud"]').click();
+    await page.locator('#modal-app #sync-url').fill('https://termuxq-sync-test.supabase.co');
+    await page.locator('#modal-app #sync-key').fill('sb_publishable_qa-test-key');
+    await page.locator('#modal-app #sync-save-config').click();
+    assert.match(await page.locator('#modal-app #sync-status').innerText(), /Konfigurasi disimpan/);
+    await page.locator('#modal-app #sync-email').fill('qa@example.com');
+    await page.locator('#modal-app #sync-password').fill('test-password-only');
+    await page.locator('#modal-app #sync-login').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Login berhasil'));
+    await page.locator('#modal-app #sync-now').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Sinkronisasi berhasil'), null, { timeout: 12000 });
+    const mockSync = await page.evaluate(() => window.__syncMock);
+    assert.ok(mockSync.uploaded.some(row => row.record_type === 'asset' && row.record_id === 'sync-asset-qa'));
+    assert.ok(mockSync.uploaded.some(row => row.record_type === 'ticket' && row.record_id === 'sync-ticket-qa'));
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_sync_baseline_v1')).assets.length), 1);
+    assert.match(await page.locator('#modal-app #sync-account').innerText(), /qa@example.com/);
+    await page.locator('#modal-close').click();
+
     // Hashing: SHA-256 of known string.
     await page.locator('[data-module="hash"]').click();
     await page.locator('#modal-app #t').fill('abc');
@@ -155,10 +187,11 @@ const { chromium } = require('playwright');
     assert.match(checkText, /IT Support Ticket Log/);
     assert.match(checkText, /IT Asset Inventory/);
     assert.match(checkText, /IT Operations Overview/);
+    assert.match(checkText, /Cloud Sync \(Supabase\)/);
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export with linked asset, asset inventory CRUD/filter/export, IT operations summary, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets, inventory, IT operations summary, cloud sync SDK flow, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

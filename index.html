@@ -277,10 +277,10 @@ const _om=openModule;openModule=id=>{_om(id);const m=currentModule,live=A[id]||C
 
 modules.push({id:'agent',cat:'dashboard',icon:'⛓',name:'Device Sync (Agent)',desc:'Sinkronkan dashboard dengan perangkat ini: CPU, RAM, storage, baterai, IP.',details:[]});
 const RAW='https://raw.githubusercontent.com/basojhie/termuxq-next/main/termuxq_agent.py',AGC=['pkg install python termux-api   # khusus Termux (pasang juga app Termux:API untuk baterai)','curl -O '+RAW+'   # Termux / Linux / macOS','curl.exe -O '+RAW+'   # Windows PowerShell','python termuxq_agent.py   # jalankan; Ctrl+C untuk berhenti','pip install psutil   # opsional: CPU, RAM, baterai lebih akurat di Windows/Linux'];
-const AG={url:ls('tq_agent','')||'http://127.0.0.1:8765',want:!!ls('tq_agent','')||['localhost','127.0.0.1'].includes(location.hostname),on:false,d:null},lat=[];
+const AG={url:ls('tq_agent','')||'http://127.0.0.1:8765',want:!!ls('tq_agent','')||['localhost','127.0.0.1'].includes(location.hostname),on:false,pingSupported:false,d:null},lat=[];
 const act=(ic,t,p)=>{const a=$('#activity');a.insertAdjacentHTML('afterbegin',`<div class="activity-row"><div class="activity-icon">${ic}</div><div><b>${esc(t)}</b><p>${esc(p)}</p></div><span class="activity-time">${new Date().toLocaleTimeString('en-GB')}</span></div>`);while(a.children.length>6)a.lastElementChild.remove()};
 const setPill=()=>{$('#agent-pill').innerHTML=AG.on?'<span class="dot"></span> Agent: terhubung':'⛓ Agent: tidak terhubung'};
-async function agentPoll(){const was=AG.on;try{AG.d=await(await fetch(AG.url+'/stats',{cache:'no-store'})).json();AG.on=true}catch{AG.d=null;AG.on=false}if(AG.on!==was){setPill();act(AG.on?'⛓':'⚠',AG.on?'Agent terhubung':'Agent terputus',AG.on?(AG.d.host||'perangkat ini'):'Menunggu agent berjalan lagi')}}
+async function agentPoll(){const was=AG.on;try{const response=await fetch(AG.url+'/stats',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);AG.d=await response.json();AG.on=true;AG.pingSupported=Array.isArray(AG.d.features)&&AG.d.features.includes('private_lan_ping')}catch{AG.d=null;AG.on=false;AG.pingSupported=false}if(AG.on!==was){setPill();act(AG.on?'⛓':'⚠',AG.on?'Agent terhubung':'Agent terputus',AG.on?(AG.d.host||'perangkat ini'):'Menunggu agent berjalan lagi')}}
 A.agent=r=>{const g=mk(r,`<label>Halaman web tidak bisa membaca CPU, RAM, storage, dan IP lokal. Jalankan agent kecil di perangkat ini: ia hanya mendengarkan 127.0.0.1, hanya membaca, dan tidak menjalankan perintah dari web. Kode: termuxq_agent.py</label>`+AGC.map((c,i)=>`<div class=cmd><code>${esc(c)}</code><button class=btn data-k=${i}>Salin</button></div>`).join('')+`<div class=row><input id=u style=flex:1><button class=btn id=c>Hubungkan</button><button class=btn id=x>Putuskan</button></div><div class=out id=o>${AG.on?'Terhubung ke '+esc(AG.d.host||'perangkat'):'Belum terhubung.'}</div>`);g('#u').value=AG.url;r.querySelectorAll('[data-k]').forEach(b=>b.onclick=e=>copy(AGC[b.dataset.k].split('   #')[0],e.currentTarget));g('#c').onclick=async()=>{AG.url=g('#u').value.trim().replace(/\/$/,'');g('#o').textContent='Menghubungkan…';AG.want=true;await agentPoll();if(AG.on){sv('tq_agent',JSON.stringify(AG.url));g('#o').textContent='Terhubung ke '+(AG.d.host||'perangkat');refresh()}else{AG.want=false;g('#o').textContent='Gagal. Pastikan agent berjalan, URL benar, dan izinkan akses jaringan lokal bila browser menanyakannya.'}};g('#x').onclick=()=>{AG.want=AG.on=false;AG.d=null;try{localStorage.removeItem('tq_agent')}catch{}setPill();g('#o').textContent='Terputus.';refresh()}};
 A.lan=r=>{
  const saved=ls('tq_lan_hosts_v1',[]);
@@ -310,6 +310,16 @@ A.lan=r=>{
   sv('tq_lan_hosts_v1',hosts);
   if(!AG.on)await agentPoll();
   if(!AG.on){g('#lan-summary').textContent='Agent belum terhubung. Buka Device Sync (Agent), pastikan agent berjalan, lalu coba lagi.';return}
+  if(!AG.pingSupported){
+   g('#lan-summary').textContent='Agent terhubung, tetapi versinya lama atau belum mendukung LAN ping. Hentikan agent lama, perbarui file termuxq_agent.py, lalu jalankan ulang.';
+   const raw='https://raw.githubusercontent.com/basojhie/termuxq-next/main/termuxq_agent.py';
+   const win='Invoke-WebRequest -Uri "'+raw+'" -OutFile ".\\termuxq_agent.py"; python .\\termuxq_agent.py';
+   const termux='curl -fsSL "'+raw+'" -o termuxq_agent.py && python termuxq_agent.py';
+   g('#lan-results').innerHTML='<div class="out">Windows PowerShell (jalankan pada folder yang berisi termuxq_agent.py):\n'+esc(win)+'\n\nTermux / Linux / macOS (jalankan pada folder agent):\n'+esc(termux)+'</div><div class="row"><button class="btn" type="button" id="lan-copy-win">Salin perintah Windows</button><button class="btn secondary" type="button" id="lan-copy-termux">Salin perintah Termux/Linux</button></div>';
+   g('#lan-copy-win').onclick=e=>copy(win,e.currentTarget);
+   g('#lan-copy-termux').onclick=e=>copy(termux,e.currentTarget);
+   return;
+  }
   const button=g('#lan-scan');button.disabled=true;button.textContent='Memeriksa…';
   g('#lan-summary').textContent='Memeriksa '+hosts.length+' host menggunakan ping ICMP. Mohon tunggu hasil.';
   g('#lan-results').innerHTML=hosts.map(host=>'<div class="panel" style="padding:10px;margin-top:8px;box-shadow:none" data-host="'+host+'"><div class="row" style="justify-content:space-between"><strong>'+host+'</strong><span class="mini-tag" data-state>MENUNGGU</span></div><div class="small" data-detail>Belum diperiksa.</div></div>').join('');

@@ -7,6 +7,13 @@ const { chromium } = require('playwright');
   const page = await browser.newPage({ acceptDownloads: true });
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
+  // Simulate an older agent: /stats works but does not advertise LAN ping support.
+  await page.route('http://127.0.0.1:8765/stats', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    headers: { 'Access-Control-Allow-Origin': 'http://127.0.0.1:8000', 'Cache-Control': 'no-store' },
+    body: JSON.stringify({ host: 'legacy-agent', os: 'Test OS', cores: 4, cpu_pct: 10, mem: {pct: 20}, disk: {pct: 30}, battery: null, ip: '127.0.0.1', uptime: 100 })
+  }));
 
   try {
     await page.goto(process.env.TERMUXQ_URL || 'http://127.0.0.1:8000', { waitUntil: 'domcontentloaded' });
@@ -31,6 +38,10 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #lan-hosts').fill('8.8.8.8');
     await page.locator('#modal-app #lan-scan').click();
     assert.match(await page.locator('#modal-app #lan-summary').innerText(), /RFC1918/);
+    await page.locator('#modal-app #lan-hosts').fill('192.168.1.10');
+    await page.locator('#modal-app #lan-scan').click();
+    assert.match(await page.locator('#modal-app #lan-summary').innerText(), /versinya lama|belum mendukung LAN ping/i);
+    assert.equal(await page.locator('#modal-app #lan-copy-win').count(), 1);
     await page.locator('#modal-close').click();
 
     // Ticket form: create, update status, export.

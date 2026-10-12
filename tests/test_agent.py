@@ -39,8 +39,10 @@ class AgentHttpTests(unittest.TestCase):
         self.assertIn("application/json", headers.get("Content-Type", ""))
         self.assertEqual(headers.get("Cache-Control"), "no-store")
         data = json.loads(body)
-        expected = {"host", "os", "cores", "cpu_pct", "mem", "disk", "battery", "ip", "uptime"}
+        expected = {"host", "os", "cores", "cpu_pct", "mem", "disk", "battery", "ip", "uptime", "agent_version", "features"}
         self.assertTrue(expected.issubset(data.keys()))
+        self.assertEqual(data["agent_version"], "2.1.0")
+        self.assertIn("private_lan_ping", data["features"])
 
     def test_allowed_origin_receives_cors_header(self):
         status, headers, _ = self.request(origin="https://basojhie.github.io")

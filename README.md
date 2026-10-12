@@ -64,3 +64,7 @@ Modul **LAN Device Monitor** memakai Python Agent lokal untuk mengirim satu ping
 Perlindungan agent: target dibatasi ke subnet privat RFC1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), maksimal 24 target per batch dari UI dan 60 panggilan ping per menit pada agent. Validasi berlaku di browser dan agent; proses ping menggunakan argumen terpisah tanpa shell dan timeout pendek. Tidak ada pemindaian port atau eksekusi perintah bebas. Gunakan hanya pada jaringan dan perangkat yang kamu miliki atau diizinkan untuk dikelola.
 
 Jalankan dashboard serta agent lokal dengan instruksi di atas, lalu buka **Network Tools → LAN Device Monitor**. Bila dibuka melalui GitHub Pages, browser harus mengizinkan koneksi lokal ke agent dan agent harus berjalan pada perangkat yang sama dengan browser.
+
+
+### Diagnosis Agent versi lama
+Endpoint /stats mengembalikan agent_version dan features. Dashboard menggunakan metadata ini untuk memeriksa dukungan private_lan_ping. Jika Agent lama masih terhubung, modul LAN memberi petunjuk untuk mengganti termuxq_agent.py lalu menjalankannya ulang, bukan sekadar menampilkan NetworkError.

@@ -150,6 +150,7 @@ class H(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         if route.path == "/stats":
             self._json(200, {"host": socket.gethostname(), "os": platform.system() + " " + platform.release(),
+                "agent_version": "2.1.0", "features": ["stats", "private_lan_ping"],
                 "cores": os.cpu_count(), "cpu_pct": cpu(), "mem": mem(), "disk": disk(), "battery": battery(),
                 "ip": local_ip(), "uptime": uptime()})
             return

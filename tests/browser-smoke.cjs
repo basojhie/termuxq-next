@@ -91,7 +91,7 @@ const { chromium } = require('playwright');
       page.waitForEvent('download'),
       page.locator('#modal-app #inv-export').click()
     ]);
-    assert.match(inventoryDownload.suggestedFilename(), /^termuxq-inventory-.*\\.json$/);
+    assert.match(inventoryDownload.suggestedFilename(), /^termuxq-inventory-.*\.json$/);
     const inventoryPath = await inventoryDownload.path();
     const inventoryExport = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
     assert.equal(inventoryExport.devices[0].name, 'QA Workstation');

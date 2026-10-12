@@ -103,7 +103,7 @@ const modules=[
 ];
 modules.push(
  {id:'subnet',cat:'network',icon:'▦',name:'IPv4 Subnet Calculator',desc:'Hitung network, broadcast, mask, dan rentang host dari CIDR.',details:['Perhitungan IPv4 dilakukan lokal di browser.','Menerima format 192.168.1.10/24; tanpa prefix memakai /24.']},
- {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal.',details:['Data tiket disimpan di localStorage browser ini.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
+ {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal serta kaitkan dengan aset.',details:['Data tiket disimpan di localStorage browser ini.','Pilih perangkat dari IT Asset Inventory untuk menyimpan snapshot nama/IP pada tiket.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
  {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']},
  {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']}
 );
@@ -248,27 +248,68 @@ A.subnet=r=>{
 
 
 A.tickets=r=>{
- const g=mk(r,'<label>Catat masalah dan progres penanganan. Data hanya berada di browser ini; ekspor JSON secara berkala untuk cadangan.</label><form id="ticket-form"><div class="row"><input id="title" maxlength="120" required placeholder="Ringkasan masalah" style="flex:1;min-width:180px"><input id="device" maxlength="100" placeholder="Perangkat / zona (opsional)" style="flex:1;min-width:160px"></div><div class="row"><select id="priority" style="flex:1;min-width:120px"><option>Low</option><option selected>Normal</option><option>High</option><option>Critical</option></select></div><textarea id="description" maxlength="2000" placeholder="Detail masalah, tindakan troubleshooting, dan hasil"></textarea><button class="btn" type="submit">+ Buat tiket</button></form><div class="row"><input id="q" placeholder="Cari tiket..." style="flex:1;min-width:150px"><select id="filter" style="flex:1;min-width:120px"><option value="">Semua status</option><option>Open</option><option>In Progress</option><option>Waiting</option><option>Resolved</option></select></div><div class="row"><button class="btn" id="export" type="button">Ekspor JSON</button><label class="btn" for="import">Impor JSON<input id="import" type="file" accept="application/json,.json" style="display:none"></label></div><div class="small" id="message" aria-live="polite">Penyimpanan lokal aktif.</div><div class="out" id="count">0 tiket</div><div id="list"></div>');
- const storageKey='tq_tickets',statuses=['Open','In Progress','Waiting','Resolved'],priorities=['Low','Normal','High','Critical'];
+ const g=mk(r,'<label>Catat masalah, progres penanganan, dan kaitkan tiket dengan PC/printer dari IT Asset Inventory. Data hanya berada di browser ini; ekspor JSON berkala untuk cadangan.</label><form id="ticket-form"><div class="row"><input id="title" maxlength="120" required placeholder="Ringkasan masalah" style="flex:1;min-width:180px"><input id="device" maxlength="140" placeholder="Perangkat / zona (opsional)" style="flex:1;min-width:160px"></div><div class="row"><select id="asset-link" style="flex:1;min-width:200px"><option value="">Tidak terkait dengan aset inventaris</option></select><select id="priority" style="flex:1;min-width:120px"><option>Low</option><option selected>Normal</option><option>High</option><option>Critical</option></select></div><div class="small" id="asset-link-note">Pilih perangkat jika tiket berkaitan dengan aset yang terdaftar.</div><textarea id="description" maxlength="2000" placeholder="Detail masalah, tindakan troubleshooting, dan hasil"></textarea><button class="btn" type="submit">+ Buat tiket</button></form><div class="row"><input id="q" placeholder="Cari tiket..." style="flex:1;min-width:150px"><select id="filter" style="flex:1;min-width:120px"><option value="">Semua status</option><option>Open</option><option>In Progress</option><option>Waiting</option><option>Resolved</option></select></div><div class="row"><button class="btn" id="export" type="button">Ekspor JSON</button><label class="btn" for="import">Impor JSON<input id="import" type="file" accept="application/json,.json" style="display:none"></label></div><div class="small" id="message" aria-live="polite">Penyimpanan lokal aktif.</div><div class="out" id="count">0 tiket</div><div id="list"></div>');
+ const storageKey='tq_tickets',assetStorageKey='tq_asset_inventory_v1',statuses=['Open','In Progress','Waiting','Resolved'],priorities=['Low','Normal','High','Critical'];
  let tickets=ls(storageKey,[]);if(!Array.isArray(tickets))tickets=[];
  const idNew=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
  const save=()=>sv(storageKey,tickets);
+ const readAssets=()=>{const a=ls(assetStorageKey,[]);return Array.isArray(a)?a.filter(x=>x&&typeof x.id==='string'&&typeof x.name==='string'&&typeof x.ip==='string'):[]};
  const opt=(list,current)=>list.map(s=>'<option value="'+esc(s)+'"'+(s===current?' selected':'')+'>'+esc(s)+'</option>').join('');
+ const assetRefFor=asset=>asset?{id:String(asset.id).slice(0,80),name:String(asset.name||'').slice(0,100),ip:String(asset.ip||'').slice(0,45),zone:String(asset.zone||'').slice(0,60)}:null;
+ const assetLabel=asset=>asset&&typeof asset.name==='string'?asset.name+(asset.ip?' · '+asset.ip:'')+(asset.zone?' · '+asset.zone:''):'';
+ const refreshAssetOptions=()=>{
+  const assets=readAssets(),selected=g('#asset-link').value;
+  g('#asset-link').innerHTML='<option value="">Tidak terkait dengan aset inventaris</option>'+assets.map(a=>'<option value="'+esc(a.id)+'">'+esc(assetLabel(a))+'</option>').join('');
+  if(assets.some(a=>a.id===selected))g('#asset-link').value=selected;
+  g('#asset-link-note').textContent=assets.length?assets.length+' aset tersedia dari IT Asset Inventory. Perangkat terkait akan tersimpan sebagai snapshot pada tiket.':'Belum ada aset. Tambahkan perangkat dari modul IT Asset Inventory terlebih dahulu.';
+ };
+ const selectedAsset=()=>readAssets().find(a=>a.id===g('#asset-link').value)||null;
+ g('#asset-link').onchange=()=>{
+  const a=selectedAsset();
+  if(a){g('#device').value=assetLabel(a);g('#asset-link-note').textContent='Terkait dengan '+assetLabel(a)+'. Data nama/IP ikut tersimpan pada tiket.'}
+  else refreshAssetOptions();
+ };
  const draw=()=>{
   const q=g('#q').value.trim().toLowerCase(),f=g('#filter').value;
-  const shown=tickets.filter(t=>(!f||t.status===f)&&[t.title,t.device,t.description,t.priority,t.status].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  const shown=tickets.filter(t=>(!f||t.status===f)&&[t.title,t.device,t.description,t.priority,t.status,t.assetRef&&t.assetRef.name,t.assetRef&&t.assetRef.ip,t.assetRef&&t.assetRef.zone].some(v=>String(v||'').toLowerCase().includes(q))).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
   g('#count').textContent=tickets.length+' tiket tersimpan · '+tickets.filter(t=>t.status!=='Resolved').length+' belum selesai';
-  g('#list').innerHTML=shown.map(t=>'<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between"><strong>'+esc(t.title)+'</strong><span class="mini-tag">'+esc(t.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.device||'Perangkat tidak ditentukan')+' · '+esc(new Date(t.createdAt).toLocaleString('id-ID'))+'</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--text)">'+esc(t.description||'Tidak ada detail')+'</div><div class="row"><select data-status="'+esc(t.id)+'" aria-label="Status tiket" style="flex:1;min-width:120px">'+opt(statuses,t.status)+'</select><button class="btn" type="button" data-delete="'+esc(t.id)+'">Hapus</button></div></article>').join('')||'<div class="out">Tidak ada tiket yang sesuai.</div>';
+  g('#list').innerHTML=shown.map(t=>{
+   const linked=t.assetRef&&typeof t.assetRef.name==='string'?'<div class="small" style="margin:5px 0;color:var(--cyan)">Aset terkait: '+esc(assetLabel(t.assetRef))+'</div>':'';
+   return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none"><div class="row" style="justify-content:space-between"><strong>'+esc(t.title)+'</strong><span class="mini-tag">'+esc(t.priority)+'</span></div><div class="small" style="margin:5px 0">'+esc(t.device||'Perangkat tidak ditentukan')+' · '+esc(new Date(t.createdAt).toLocaleString('id-ID'))+'</div>'+linked+'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--text)">'+esc(t.description||'Tidak ada detail')+'</div><div class="row"><select data-status="'+esc(t.id)+'" aria-label="Status tiket" style="flex:1;min-width:120px">'+opt(statuses,t.status)+'</select><button class="btn" type="button" data-delete="'+esc(t.id)+'">Hapus</button></div></article>';
+  }).join('')||'<div class="out">Tidak ada tiket yang sesuai.</div>';
   g('#list').querySelectorAll('[data-status]').forEach(el=>el.onchange=()=>{const t=tickets.find(x=>x.id===el.dataset.status);if(t){t.status=el.value;save();draw()}});
   g('#list').querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(!confirm('Hapus tiket ini?'))return;tickets=tickets.filter(x=>x.id!==el.dataset.delete);save();draw();g('#message').textContent='Tiket dihapus.'});
  };
- g('#ticket-form').onsubmit=e=>{e.preventDefault();const title=g('#title').value.trim();if(!title)return;if(tickets.length>=500){g('#message').textContent='Batas 500 tiket tercapai. Ekspor lalu arsipkan beberapa tiket terlebih dahulu.';return}tickets.unshift({id:idNew(),title:title,device:g('#device').value.trim(),priority:g('#priority').value,description:g('#description').value.trim(),status:'Open',createdAt:new Date().toISOString()});save();g('#ticket-form').reset();draw();g('#message').textContent='Tiket dibuat dan disimpan pada browser ini.'};
+ g('#ticket-form').onsubmit=e=>{
+  e.preventDefault();const title=g('#title').value.trim();
+  if(!title)return;
+  if(tickets.length>=500){g('#message').textContent='Batas 500 tiket tercapai. Ekspor lalu arsipkan beberapa tiket terlebih dahulu.';return}
+  const asset=selectedAsset(),chosen=g('#asset-link').value;
+  if(chosen&&!asset){g('#message').textContent='Aset pilihan tidak ditemukan lagi. Segarkan daftar aset atau pilih kembali.';refreshAssetOptions();return}
+  const ticket={id:idNew(),title:title,device:g('#device').value.trim(),assetRef:assetRefFor(asset),priority:g('#priority').value,description:g('#description').value.trim(),status:'Open',createdAt:new Date().toISOString()};
+  tickets.unshift(ticket);save();g('#ticket-form').reset();refreshAssetOptions();draw();g('#message').textContent=asset?'Tiket dibuat dan dikaitkan dengan '+asset.name+'.':'Tiket dibuat dan disimpan pada browser ini.';
+ };
  g('#q').oninput=draw;g('#filter').onchange=draw;
- g('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),tickets:tickets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-tickets-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);g('#message').textContent='Ekspor JSON disiapkan.'};
- g('#import').onchange=async()=>{const file=g('#import').files[0];if(!file)return;try{const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.tickets;if(!Array.isArray(items))throw new Error('Berkas harus berupa array tiket atau objek yang memiliki properti tickets.');const known=new Set(tickets.map(t=>String(t.id)));let added=0;for(const x of items.slice(0,500)){if(!x||typeof x.title!=='string'||!x.title.trim())continue;const id=String(x.id||idNew()).slice(0,80);if(known.has(id))continue;tickets.push({id:id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,100),priority:priorities.includes(x.priority)?x.priority:'Normal',description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt:!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString()});known.add(id);added++;if(tickets.length>=500)break}save();draw();g('#message').textContent='Impor selesai: '+added+' tiket baru.'}catch(err){g('#message').textContent='Impor gagal: '+err.message}finally{g('#import').value=''}};
- draw();
+ g('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schemaVersion:2,exportedAt:new Date().toISOString(),tickets:tickets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-tickets-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);g('#message').textContent='Ekspor JSON disiapkan.'};
+ g('#import').onchange=async()=>{
+  const file=g('#import').files[0];if(!file)return;
+  try{
+   const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.tickets;
+   if(!Array.isArray(items))throw new Error('Berkas harus berupa array tiket atau objek yang memiliki properti tickets.');
+   const known=new Set(tickets.map(t=>String(t.id)));let added=0;
+   for(const x of items.slice(0,500)){
+    if(!x||typeof x.title!=='string'||!x.title.trim())continue;
+    const id=String(x.id||idNew()).slice(0,80);if(known.has(id))continue;
+    const linked=x.assetRef&&typeof x.assetRef.name==='string'?{id:String(x.assetRef.id||'').slice(0,80),name:x.assetRef.name.slice(0,100),ip:String(x.assetRef.ip||'').slice(0,45),zone:String(x.assetRef.zone||'').slice(0,60)}:null;
+    tickets.push({id:id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt:!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString()});
+    known.add(id);added++;if(tickets.length>=500)break;
+   }
+   save();draw();g('#message').textContent='Impor selesai: '+added+' tiket baru.';
+  }catch(err){g('#message').textContent='Impor gagal: '+err.message}
+  finally{g('#import').value=''}
+ };
+ refreshAssetOptions();draw();
 };
-
 const mx=(()=>{let c,x,id,on=false,cols=[];const draw=()=>{x.fillStyle='rgba(7,11,16,.08)';x.fillRect(0,0,c.width,c.height);x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--accent');x.font='14px monospace';cols.forEach((y,i)=>{x.fillText(String.fromCharCode(0x30A0+Math.random()*96),i*14,y*14);cols[i]=y*14>c.height&&Math.random()>.975?0:y+1})};return{get on(){return on},toggle(){if(on){clearInterval(id);c.remove();on=false;return}if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;c=document.createElement('canvas');c.id='matrix-bg';c.width=innerWidth;c.height=innerHeight;document.body.prepend(c);x=c.getContext('2d');cols=Array(Math.ceil(c.width/14)).fill(0);on=true;id=setInterval(draw,60)}}})();
 A.matrix=r=>{const g=mk(r,`<label>Efek hujan karakter di latar belakang (mengikuti warna tema; mati otomatis bila "reduce motion" aktif).</label><button class=btn id=t></button>`),lab=()=>g('#t').textContent=mx.on?'Matikan efek':'Nyalakan efek';lab();g('#t').onclick=()=>{mx.toggle();lab()}};
 const CK={defense:['Layar terkunci (PIN/biometrik)','Sistem dan aplikasi terbaru','Verifikasi 2 langkah di akun penting','Password unik / pakai password manager','Backup berkala dan pernah diuji pulih','Aplikasi hanya dari sumber tepercaya','Enkripsi penyimpanan aktif','Wi-Fi publik dihindari atau pakai VPN'],privacy:['Izin lokasi/kamera/mikrofon ditinjau berkala','Iklan personalisasi dimatikan','Riwayat dan cookie dibersihkan teratur','Tidak ada token/password di repo atau catatan','Aplikasi lama yang tak dipakai dihapus','Notifikasi di layar kunci disembunyikan']};

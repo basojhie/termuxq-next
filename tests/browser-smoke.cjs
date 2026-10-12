@@ -48,9 +48,13 @@ const { chromium } = require('playwright');
     await page.locator('#modal-close').click();
 
     // Ticket form: create, update status, export.
+    await page.evaluate(() => localStorage.setItem('tq_asset_inventory_v1', JSON.stringify([
+      { id: 'asset-qa-1', name: 'QA Workstation', ip: '192.168.1.20', zone: 'Zona QA', type: 'PC', status: 'Belum dicek' }
+    ])));
     await page.locator('[data-module="tickets"]').click();
     await page.locator('#modal-app #title').fill('Printer offline smoke test');
-    await page.locator('#modal-app #device').fill('Zona QA');
+    await page.locator('#modal-app #asset-link').selectOption('asset-qa-1');
+    assert.equal(await page.locator('#modal-app #device').inputValue(), 'QA Workstation · 192.168.1.20 · Zona QA');
     await page.locator('#modal-app #description').fill('Browser automated test');
     await page.locator('#modal-app #ticket-form button[type="submit"]').click();
     assert.match(await page.locator('#modal-app #count').innerText(), /1 tiket tersimpan/);
@@ -65,6 +69,11 @@ const { chromium } = require('playwright');
     const exported = JSON.parse(fs.readFileSync(downloadPath, 'utf8'));
     assert.equal(exported.tickets[0].title, 'Printer offline smoke test');
     assert.equal(exported.tickets[0].status, 'In Progress');
+    assert.equal(exported.tickets[0].assetRef.id, 'asset-qa-1');
+    assert.equal(exported.tickets[0].assetRef.name, 'QA Workstation');
+    assert.equal(exported.tickets[0].assetRef.ip, '192.168.1.20');
+    assert.match(await page.locator('#modal-app #list').innerText(), /Aset terkait: QA Workstation/);
+    await page.evaluate(() => localStorage.removeItem('tq_asset_inventory_v1'));
     await page.locator('#modal-close').click();
 
     // IT Asset Inventory: validation, add/edit, zone filtering, and JSON export.
@@ -120,7 +129,7 @@ const { chromium } = require('playwright');
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export, asset inventory CRUD/filter/export, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export with linked asset, asset inventory CRUD/filter/export, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

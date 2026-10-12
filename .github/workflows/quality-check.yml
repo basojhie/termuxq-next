@@ -67,3 +67,27 @@ jobs:
                   raise SystemExit("Service worker does not cache " + name)
           print("Manifest JSON and PWA asset paths are valid.")
           PY
+
+      - name: Check Python agent syntax and API safeguards
+        run: |
+          python3 -m py_compile termuxq_agent.py
+          python3 -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Install Playwright
+        run: npm install --no-save playwright
+
+      - name: Install Chromium for browser interaction tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser interaction tests
+        shell: bash
+        run: |
+          python3 -m http.server 8000 --bind 127.0.0.1 >/tmp/termuxq-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/index.html >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/index.html >/dev/null
+          node tests/browser-smoke.cjs

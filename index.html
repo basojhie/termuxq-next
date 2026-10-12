@@ -282,11 +282,42 @@ const setPill=()=>{$('#agent-pill').innerHTML=AG.on?'<span class="dot"></span> A
 async function agentPoll(){const was=AG.on;try{AG.d=await(await fetch(AG.url+'/stats',{cache:'no-store'})).json();AG.on=true}catch{AG.d=null;AG.on=false}if(AG.on!==was){setPill();act(AG.on?'⛓':'⚠',AG.on?'Agent terhubung':'Agent terputus',AG.on?(AG.d.host||'perangkat ini'):'Menunggu agent berjalan lagi')}}
 A.agent=r=>{const g=mk(r,`<label>Halaman web tidak bisa membaca CPU, RAM, storage, dan IP lokal. Jalankan agent kecil di perangkat ini: ia hanya mendengarkan 127.0.0.1, hanya membaca, dan tidak menjalankan perintah dari web. Kode: termuxq_agent.py</label>`+AGC.map((c,i)=>`<div class=cmd><code>${esc(c)}</code><button class=btn data-k=${i}>Salin</button></div>`).join('')+`<div class=row><input id=u style=flex:1><button class=btn id=c>Hubungkan</button><button class=btn id=x>Putuskan</button></div><div class=out id=o>${AG.on?'Terhubung ke '+esc(AG.d.host||'perangkat'):'Belum terhubung.'}</div>`);g('#u').value=AG.url;r.querySelectorAll('[data-k]').forEach(b=>b.onclick=e=>copy(AGC[b.dataset.k].split('   #')[0],e.currentTarget));g('#c').onclick=async()=>{AG.url=g('#u').value.trim().replace(/\/$/,'');g('#o').textContent='Menghubungkan…';AG.want=true;await agentPoll();if(AG.on){sv('tq_agent',JSON.stringify(AG.url));g('#o').textContent='Terhubung ke '+(AG.d.host||'perangkat');refresh()}else{AG.want=false;g('#o').textContent='Gagal. Pastikan agent berjalan, URL benar, dan izinkan akses jaringan lokal bila browser menanyakannya.'}};g('#x').onclick=()=>{AG.want=AG.on=false;AG.d=null;try{localStorage.removeItem('tq_agent')}catch{}setPill();g('#o').textContent='Terputus.';refresh()}};
 const rows=[...document.querySelectorAll('.system-row')],nb=[...document.querySelectorAll('.network-box')],tags=[...document.querySelectorAll('#overview-panels .mini-tag')],st=[...document.querySelectorAll('.stat')],pulse=document.querySelector('.pulse');
+
+const metricHistoryKey='tq_metric_history_v1';
+let metricHistory=ls(metricHistoryKey,[]);
+if(!Array.isArray(metricHistory))metricHistory=[];
+metricHistory=metricHistory.filter(p=>p&&Number.isFinite(p.t)&&p.t<Date.now()+60000).slice(-120);
+let lastMetricSnapshotAt=metricHistory.length?metricHistory[metricHistory.length-1].t:0;
+rows[0].parentElement.insertAdjacentHTML('afterend','<div id="tq-metric-history" style="margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#091117"><div class="panel-title"><h2>Resource History</h2><span class="mini-tag">AGENT DATA ONLY</span></div><div id="tq-history-summary" class="small" aria-live="polite">Menunggu data agent.</div><div style="display:grid;gap:9px;margin-top:12px"><div><div class="row" style="justify-content:space-between"><span class="small">CPU</span><span id="tq-history-cpu-label" class="small">—</span></div><div id="tq-history-cpu" class="pulse" style="height:32px;margin-top:4px"></div></div><div><div class="row" style="justify-content:space-between"><span class="small">RAM</span><span id="tq-history-mem-label" class="small">—</span></div><div id="tq-history-mem" class="pulse" style="height:32px;margin-top:4px"></div></div><div><div class="row" style="justify-content:space-between"><span class="small">Storage</span><span id="tq-history-disk-label" class="small">—</span></div><div id="tq-history-disk" class="pulse" style="height:32px;margin-top:4px"></div></div><div><div class="row" style="justify-content:space-between"><span class="small">Battery</span><span id="tq-history-battery-label" class="small">—</span></div><div id="tq-history-battery" class="pulse" style="height:32px;margin-top:4px"></div></div></div><div class="small" style="margin-top:10px">Merekam maksimal 120 sampel, satu sampel per menit, hanya ketika agent mengirim metrik aktual. Riwayat tersimpan di browser ini.</div></div>');
+const metricPct=v=>typeof v==='number'&&Number.isFinite(v)?Math.max(0,Math.min(100,v)):null;
+function renderMetricHistory(d){
+ const now=Date.now(),m=d?{cpu:metricPct(d.cpu_pct),mem:metricPct(d.mem&&d.mem.pct),disk:metricPct(d.disk&&d.disk.pct),battery:metricPct(d.battery&&d.battery.pct)}:null;
+ if(m&&(m.cpu!==null||m.mem!==null||m.disk!==null||m.battery!==null)&&now-lastMetricSnapshotAt>=60000){
+  metricHistory.push({t:now,cpu:m.cpu,mem:m.mem,disk:m.disk,battery:m.battery});
+  metricHistory=metricHistory.slice(-120);lastMetricSnapshotAt=now;sv(metricHistoryKey,metricHistory);
+ }
+ const last=metricHistory.length?metricHistory[metricHistory.length-1]:null;
+ const summary=document.getElementById('tq-history-summary');
+ summary.textContent=d
+  ?(last?'Agent '+(d.host||'perangkat')+' · sampel terakhir '+new Date(last.t).toLocaleString('id-ID')+' · '+metricHistory.length+' sampel':'Agent terhubung; sampel pertama akan direkam dalam satu menit.')
+  :(last?'Agent belum terhubung · menampilkan '+metricHistory.length+' sampel tersimpan · terakhir '+new Date(last.t).toLocaleString('id-ID'):'Hubungkan agent untuk mulai merekam metrik sistem aktual.');
+ for(const key of ['cpu','mem','disk','battery']){
+  const data=metricHistory.slice(-30),target=document.getElementById('tq-history-'+key),label=document.getElementById('tq-history-'+key+'-label');
+  target.innerHTML=data.map(p=>{
+   const n=metricPct(p[key]);
+   return n===null?'<i style="height:2px;opacity:.10"></i>':'<i title="'+new Date(p.t).toLocaleString('id-ID')+' · '+Math.round(n)+'%" style="height:'+Math.max(4,n)+'%;opacity:.85"></i>';
+  }).join('');
+  const recent=last?metricPct(last[key]):null;
+  label.textContent=recent===null?'—':Math.round(recent)+'%';
+ }
+}
+
 const setRow=(i,lab,p,txt)=>{const r=rows[i];r.querySelector('.label').textContent=lab;r.querySelector('.fill').style.width=(p==null?0:Math.min(100,p))+'%';r.querySelector('.value').textContent=txt??(p==null?'n/a':Math.round(p)+'%')},setBox=(i,lab,v,sm)=>{const b=nb[i];b.querySelector('label').textContent=lab;b.querySelector('strong').textContent=v;b.querySelector('small').textContent=sm},fmtB=n=>n<1048576?(n/1024).toFixed(0)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(1)+' GB';
 async function probe(){if(!navigator.onLine)lat.push(0);else{const t=performance.now();try{await fetch(location.pathname+'?probe='+Date.now(),{method:'HEAD',cache:'no-store'});lat.push(Math.max(1,Math.round(performance.now()-t)))}catch{lat.push(0)}}lat.splice(0,Math.max(0,lat.length-20))}
 async function browserStats(){const o={};try{const b=await navigator.getBattery();o.bat=b.level*100;o.chg=b.charging}catch{}if(performance.memory)o.mem=performance.memory.usedJSHeapSize/performance.memory.jsHeapSizeLimit*100;try{const e=await navigator.storage.estimate();o.disk=e.usage/e.quota*100;o.diskTxt=fmtB(e.usage)}catch{}return o}
 function paint(b){const d=AG.on?AG.d:null,ok=lat.filter(x=>x),last=lat.at(-1)||0,avg=ok.length?Math.round(ok.reduce((a,c)=>a+c)/ok.length):0,on=navigator.onLine,c=navigator.connection||{},bp=d?d.battery?.pct:b.bat,bc=d?d.battery?.charging:b.chg;
 tags.forEach(t=>t.textContent=d?'LIVE · AGENT':'LIVE · BROWSER');
+renderMetricHistory(d);
 if(d){setRow(0,'CPU Load',d.cpu_pct);setRow(1,'Memory',d.mem?.pct);setRow(2,'Storage',d.disk?.pct)}else{setRow(0,'CPU',null);setRow(1,'JS Heap',b.mem);setRow(2,'Site data',b.disk,b.diskTxt)}
 setRow(3,'Battery',bp,bp==null?'n/a':Math.round(bp)+'%'+(bc?'⚡':''));
 setBox(0,'LATENSI KE SITUS',on?last+' ms':'—',on?'rata-rata '+avg+' ms':'Tidak ada koneksi');

@@ -49,3 +49,10 @@ Tool yang dibuat dengan JavaScript/Web Crypto berjalan langsung di browser. Stat
 - **HTTP / SSL Inspector** mencoba permintaan HEAD dari browser. Jika CORS mengizinkan, ia menunjukkan status, waktu respons, dan header yang terlihat. Browser tidak membuka detail sertifikat lengkap, dan header yang tersembunyi oleh CORS tidak boleh dianggap tidak ada.
 - **Project Health Check** menguji Web Crypto, penyimpanan lokal, dukungan/registrasi service worker, handler modul, serta file manifest/icon yang diperlukan.
 - **Pembaruan Termux**: unduh script update_termuxq.sh dari repo ini lalu jalankan. Script membuat cadangan sebelum pembaruan repo, menolak perubahan lokal yang belum disimpan, dan menggunakan fast-forward saja.
+
+
+## System Resource History
+Saat Python Agent terhubung, dashboard menyimpan satu sampel CPU/RAM/storage/baterai yang tersedia per menit (maksimal 120 sampel) di penyimpanan lokal browser. Panel Resource History menampilkan hingga 30 sampel terakhir. Riwayat hanya tersedia pada browser/perangkat yang menyimpannya; ini bukan backend terpusat atau log permanen.
+
+## Quality checks
+GitHub Actions menjalankan pemeriksaan sintaks, uji API agent baca-saja, dan uji interaksi browser untuk subnet calculator, ticket log, hash checker, HTTP Inspector, serta Project Health Check.

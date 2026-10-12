@@ -84,3 +84,6 @@ Jika versi lama menampilkan "Illegal characters in path" ketika membersihkan fil
 
 
 Pembaruan path Windows (versi terbaru): launcher menormalisasi folder target tanpa garis miring terbalik penutup sebelum meneruskan argumen ke PowerShell. Updater juga membersihkan tanda kutip di tepi path dan menggunakan nama variabel proses yang tidak bentrok dengan variabel otomatis PowerShell `$PID`.
+
+
+Pembaruan otomatis Windows versi terbaru memisahkan prompt lokasi Agent ke subroutine batch, sehingga input folder tidak tertimpa oleh ekspansi variabel lama. Launcher juga menormalkan folder target sebelum memanggil PowerShell agar tanda kutip penutup tidak melekat pada path.

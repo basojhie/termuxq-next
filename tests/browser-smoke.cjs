@@ -107,6 +107,34 @@ const { chromium } = require('playwright');
     assert.equal(inventoryExport.devices[0].zone, 'Zona 2');
     await page.locator('#modal-close').click();
 
+    // IT Operations Overview: summarizes asset and ticket data already stored locally.
+    await page.evaluate(() => {
+      const checked = new Date().toISOString();
+      localStorage.setItem('tq_asset_inventory_v1', JSON.stringify([
+        {id:'ops-online-1',name:'Ops Online PC',ip:'192.168.1.31',zone:'Zona 1',type:'PC',status:'Online',latencyMs:2,lastCheckedAt:checked},
+        {id:'ops-no-reply-1',name:'Ops Printer',ip:'192.168.1.32',zone:'Zona 2',type:'Printer',status:'No Reply',lastCheckedAt:checked},
+        {id:'ops-error-1',name:'Ops Router',ip:'192.168.1.33',zone:'Zona 2',type:'Network',status:'Error',lastCheckedAt:checked},
+        {id:'ops-unchecked-1',name:'Ops Laptop',ip:'192.168.1.34',zone:'Zona 3',type:'Laptop',status:'Belum dicek'}
+      ]));
+      localStorage.setItem('tq_tickets', JSON.stringify([
+        {id:'ops-ticket-high',title:'Periksa workstation',device:'Ops Online PC',priority:'High',status:'Open',createdAt:checked,assetRef:{id:'ops-online-1',name:'Ops Online PC',ip:'192.168.1.31',zone:'Zona 1'}},
+        {id:'ops-ticket-normal',title:'Tindak lanjut printer',device:'Ops Printer',priority:'Normal',status:'In Progress',createdAt:checked},
+        {id:'ops-ticket-resolved',title:'Printer selesai',device:'Ops Printer',priority:'Critical',status:'Resolved',createdAt:checked}
+      ]));
+    });
+    await page.locator('[data-module="opsdash"]').click();
+    assert.equal(await page.locator('#modal-app #ops-total-assets').innerText(), '4');
+    assert.equal(await page.locator('#modal-app #ops-online').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #ops-no-reply').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #ops-not-checked').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #ops-error').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #ops-open-tickets').innerText(), '2');
+    assert.equal(await page.locator('#modal-app #ops-high-priority').innerText(), '1');
+    assert.equal(await page.locator('#modal-app #ops-resolved').innerText(), '1');
+    assert.match(await page.locator('#modal-app #ops-ticket-list').innerText(), /Periksa workstation/);
+    await page.locator('#modal-app #ops-refresh').click();
+    await page.locator('#modal-close').click();
+
     // Hashing: SHA-256 of known string.
     await page.locator('[data-module="hash"]').click();
     await page.locator('#modal-app #t').fill('abc');
@@ -126,10 +154,11 @@ const { chromium } = require('playwright');
     assert.match(checkText, /IPv4 Subnet Calculator/);
     assert.match(checkText, /IT Support Ticket Log/);
     assert.match(checkText, /IT Asset Inventory/);
+    assert.match(checkText, /IT Operations Overview/);
     assert.match(checkText, /HTTP Inspector/);
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
-    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export with linked asset, asset inventory CRUD/filter/export, SHA-256, HTTP Inspector, and Project Health Check.');
+    console.log('PASS: dashboard, resource-history panel, subnet calculator, LAN target validation, ticket CRUD/status/export with linked asset, asset inventory CRUD/filter/export, IT operations summary, SHA-256, HTTP Inspector, and Project Health Check.');
   } finally {
     await browser.close();
   }

@@ -105,7 +105,8 @@ modules.push(
  {id:'subnet',cat:'network',icon:'▦',name:'IPv4 Subnet Calculator',desc:'Hitung network, broadcast, mask, dan rentang host dari CIDR.',details:['Perhitungan IPv4 dilakukan lokal di browser.','Menerima format 192.168.1.10/24; tanpa prefix memakai /24.']},
  {id:'tickets',cat:'productivity',icon:'▤',name:'IT Support Ticket Log',desc:'Catat tiket troubleshooting dan status tindak lanjut secara lokal serta kaitkan dengan aset.',details:['Data tiket disimpan di localStorage browser ini.','Pilih perangkat dari IT Asset Inventory untuk menyimpan snapshot nama/IP pada tiket.','Gunakan Ekspor JSON untuk cadangan manual; data tidak tersinkron otomatis.']},
  {id:'lan',cat:'network',icon:'⌖',name:'LAN Device Monitor',desc:'Ping perangkat pada jaringan privat menggunakan agent lokal dan simpan daftar host.',details:['Hanya target IPv4 privat RFC1918 yang diterima.','Butuh Python Agent pada perangkat yang menjalankan dashboard.','Memakai ICMP ping baca-saja; tidak menjalankan perintah bebas atau memindai port.']},
- {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']}
+ {id:'inventory',cat:'productivity',icon:'▣',name:'IT Asset Inventory',desc:'Kelola daftar PC, printer, server, zona, dan IP dengan status ping.',details:['Inventaris disimpan lokal di browser ini.','Dukung tambah/edit/hapus, pencarian, filter zona, serta impor/ekspor JSON.','Ping memakai Agent lokal, hanya IP privat dan maksimal 24 aset per batch.']},
+ {id:'opsdash',cat:'dashboard',icon:'▥',name:'IT Operations Overview',desc:'Ringkasan inventaris, status koneksi terakhir, serta tiket IT Support.',details:['Membaca data lokal dari IT Asset Inventory dan IT Support Ticket Log.','Status koneksi menggunakan hasil ping terakhir; dashboard tidak otomatis melakukan ping.','Data tetap berada di browser ini sampai sinkronisasi bersama diterapkan.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -187,6 +188,46 @@ A.http=r=>{
   }
  };
 };
+A.opsdash=r=>{
+ const g=mk(r,'<div class="small">Ringkasan operasional berdasarkan data yang tersimpan pada browser ini. Status aset menggunakan pemeriksaan terakhir dan tidak menjalankan ping otomatis.</div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><span id="ops-updated" class="small">Memuat ringkasan…</span><div class="row"><button class="btn secondary" id="ops-refresh" type="button">Segarkan ringkasan</button><button class="btn" id="ops-open-tickets" type="button">Buka tiket</button><button class="btn" id="ops-open-inventory" type="button">Buka inventaris</button></div></div><div id="ops-metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-top:12px"></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px"><section class="panel" style="padding:12px;box-shadow:none"><strong>Tiket yang belum selesai</strong><div id="ops-ticket-list" style="margin-top:8px"></div></section><section class="panel" style="padding:12px;box-shadow:none"><strong>Aset dengan status perlu diperiksa</strong><div id="ops-asset-list" style="margin-top:8px"></div></section></div><div class="out" style="margin-top:12px">Catatan: data tiket dan inventaris masih terpisah per browser/perangkat. Sinkronisasi antar-komputer akan dibuat pada tahap berikutnya.</div>');
+ const readArray=key=>{const value=ls(key,[]);return Array.isArray(value)?value:[]};
+ const timeText=value=>{const n=Date.parse(value||'');return Number.isFinite(n)?new Date(n).toLocaleString('id-ID'):'Waktu tidak tersedia'};
+ const draw=()=>{
+  const assets=readArray('tq_asset_inventory_v1').filter(x=>x&&typeof x==='object');
+  const tickets=readArray('tq_tickets').filter(x=>x&&typeof x==='object');
+  const counts={
+   total:assets.length,
+   online:assets.filter(x=>x.status==='Online').length,
+   noReply:assets.filter(x=>x.status==='No Reply').length,
+   unchecked:assets.filter(x=>!x.status||x.status==='Belum dicek').length,
+   error:assets.filter(x=>x.status==='Error').length,
+   open:tickets.filter(x=>x.status!=='Resolved').length,
+   high:tickets.filter(x=>x.status!=='Resolved'&&(x.priority==='High'||x.priority==='Critical')).length,
+   resolved:tickets.filter(x=>x.status==='Resolved').length
+  };
+  const metrics=[
+   ['ops-total-assets','Total aset',counts.total,'Terdaftar'],
+   ['ops-online','Online',counts.online,'Ping terakhir berhasil'],
+   ['ops-no-reply','No Reply',counts.noReply,'Belum merespons ping terakhir'],
+   ['ops-not-checked','Belum dicek',counts.unchecked,'Belum ada status ping'],
+   ['ops-error','Error ping',counts.error,'Pemeriksaan bermasalah'],
+   ['ops-open-tickets','Tiket terbuka',counts.open,'Belum berstatus Resolved'],
+   ['ops-high-priority','Prioritas tinggi',counts.high,'High/Critical yang belum selesai'],
+   ['ops-resolved','Tiket selesai',counts.resolved,'Berstatus Resolved']
+  ];
+  g('#ops-metrics').innerHTML=metrics.map(([id,label,value,note])=>'<article class="panel" style="padding:12px;min-width:0;box-shadow:none"><div class="small">'+esc(label)+'</div><div id="'+id+'" style="font-size:26px;font-weight:800;line-height:1.25;margin:5px 0;overflow-wrap:anywhere">'+value+'</div><div class="small">'+esc(note)+'</div></article>').join('');
+  const recent=tickets.filter(x=>x.status!=='Resolved').sort((a,b)=>(Date.parse(b.createdAt||'')||0)-(Date.parse(a.createdAt||'')||0)).slice(0,5);
+  g('#ops-ticket-list').innerHTML=recent.map(t=>'<article class="panel" style="padding:9px;margin-top:8px;box-shadow:none"><div style="font-weight:700;overflow-wrap:anywhere">'+esc(t.title||'Tiket tanpa judul')+'</div><div class="small" style="margin-top:4px">'+esc(t.status||'Open')+' · '+esc(t.priority||'Normal')+'</div><div class="small">'+esc(t.assetRef&&t.assetRef.name||t.device||'Perangkat belum ditentukan')+'</div><div class="small">'+esc(timeText(t.createdAt))+'</div></article>').join('')||'<div class="out">Tidak ada tiket terbuka.</div>';
+  const attention=assets.filter(x=>x.status==='No Reply'||x.status==='Error').sort((a,b)=>(Date.parse(b.lastCheckedAt||'')||0)-(Date.parse(a.lastCheckedAt||'')||0)).slice(0,5);
+  g('#ops-asset-list').innerHTML=attention.map(a=>'<article class="panel" style="padding:9px;margin-top:8px;box-shadow:none"><div style="font-weight:700;overflow-wrap:anywhere">'+esc(a.name||'Perangkat tanpa nama')+'</div><div class="small">'+esc(a.status||'Belum dicek')+' · '+esc(a.ip||'IP tidak tersedia')+'</div><div class="small">'+esc(a.zone||'Zona tidak diisi')+' · '+esc(timeText(a.lastCheckedAt))+'</div></article>').join('')||'<div class="out">Tidak ada aset berstatus No Reply atau Error pada pemeriksaan terakhir.</div>';
+  g('#ops-updated').textContent='Ringkasan diperbarui: '+new Date().toLocaleString('id-ID');
+ };
+ g('#ops-refresh').onclick=draw;
+ g('#ops-open-tickets').onclick=()=>openModule('tickets');
+ g('#ops-open-inventory').onclick=()=>openModule('inventory');
+ draw();
+};
+
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');
  const run=async()=>{
@@ -200,6 +241,7 @@ A.check=r=>{
   add('IPv4 Subnet Calculator',typeof A.subnet==='function','Handler modul '+(typeof A.subnet==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Support Ticket Log',typeof A.tickets==='function','Handler modul '+(typeof A.tickets==='function'?'terdaftar.':'tidak ditemukan.'));
   add('IT Asset Inventory',typeof A.inventory==='function','Handler modul '+(typeof A.inventory==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('IT Operations Overview',typeof A.opsdash==='function','Handler modul '+(typeof A.opsdash==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){

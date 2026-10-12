@@ -5,7 +5,7 @@ TermuxQ Next adalah toolkit IT Support berbasis browser. Tool client-side berjal
 > Dashboard tidak menggunakan angka resource contoh. Ketika agent tidak terhubung, antarmuka membedakan metrik browser/jaringan dari statistik sistem yang belum tersedia. Log aktivitas menampilkan peristiwa sesi saat ini.
 
 ## Modul aktif di browser
-Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi di localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, IT Support Ticket Log (localStorage + JSON import/export), IT Asset Inventory (localStorage + ping + JSON import/export), IPv4 Subnet Calculator, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP response test, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
+Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi di localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, IT Support Ticket Log (localStorage + JSON import/export), IT Asset Inventory (localStorage + ping + JSON import/export), IT Operations Overview, IPv4 Subnet Calculator, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP response test, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
 
 ## Akses
 https://basojhie.github.io/termuxq-next/
@@ -100,3 +100,10 @@ Agent memakai server HTTP yang mengabaikan disconnect klien yang umum (`WinError
 Menu **IT Asset Inventory** membantu mencatat hingga 500 PC, laptop, printer, server, dan perangkat jaringan, berikut nama, zona/lokasi, IP privat, tipe, catatan, hasil ping terakhir, serta latensi bila tersedia. Fitur mendukung tambah/edit/hapus, pencarian, filter zona, ekspor dan impor JSON.
 
 Data inventaris disimpan pada localStorage browser ini dan tidak otomatis tersinkron ke browser/perangkat lain. IP divalidasi ke jaringan privat RFC1918. Tombol **Ping tampil (maks. 24)** menguji maksimal 24 perangkat pada satu batch menggunakan Agent yang terhubung; filter pencarian/zona dapat digunakan untuk memilih subset perangkat. Gunakan hanya untuk perangkat/jaringan yang dimiliki atau diizinkan.
+
+
+## IT Operations Overview
+
+Modul **IT Operations Overview** merangkum jumlah aset, hasil ping terakhir (Online, No Reply, Belum dicek, Error), tiket yang belum selesai, tiket prioritas High/Critical, serta tiket Resolved. Modul juga menampilkan beberapa tiket terbaru yang belum selesai dan aset yang perlu diperiksa.
+
+Dashboard hanya membaca `tq_asset_inventory_v1` dan `tq_tickets` dari `localStorage` browser yang sedang digunakan. Status perangkat adalah hasil pemeriksaan terakhir—modul tidak melakukan ping otomatis. Karena itu, ringkasan pada perangkat lain bisa berbeda sampai sinkronisasi database bersama diterapkan pada tahap berikutnya.

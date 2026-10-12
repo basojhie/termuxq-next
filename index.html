@@ -219,8 +219,8 @@ setBox(1,'CONNECTION',on?'ONLINE':'OFFLINE',(c.effectiveType||'tipe n/a')+(c.dow
 setBox(2,'LOCAL IP',d?.ip||'butuh agent',d?(d.host||'')+' · '+(d.os||''):'Browser tidak bisa membaca IP lokal');
 setBox(3,'HTTP PROBE FAIL',(lat.length?Math.round(lat.filter(x=>!x).length/lat.length*100):0)+'%','dari '+lat.length+' probe HTTP terakhir');
 const pad=[...Array(Math.max(0,20-lat.length)).fill(0),...lat],m=Math.max(...pad,1);pulse.innerHTML=pad.map(x=>`<i style="height:${Math.max(6,x/m*100)}%"></i>`).join('');
-const hi=[d?.cpu_pct,d?d.mem?.pct:b.mem,d?.disk?.pct].some(x=>x>90),low=bp!=null&&bp<20&&!bc;
-st[0].querySelector('.stat-value').textContent=!on?'OFFLINE':hi?'TINGGI':low?'BATERAI RENDAH':'NORMAL';st[0].querySelector('.stat-foot').innerHTML='<span class="green">●</span> Dihitung dari data langsung';
+const hi=!!d&&[d.cpu_pct,d.mem?.pct,d.disk?.pct].some(x=>x>90),low=bp!=null&&bp<20&&!bc;
+st[0].querySelector('.stat-value').textContent=!on?'OFFLINE':(d?(hi?'RESOURCE HIGH':low?'BATTERY LOW':'NORMAL'):(low?'BATTERY LOW':'BROWSER ONLY'));st[0].querySelector('.stat-foot').textContent=d?'Metrik perangkat melalui agent':(on?'Status browser/jaringan; perlu agent untuk metrik sistem':'Tidak ada koneksi ke situs ini');
 st[1].querySelector('.stat-value').innerHTML=(on?last:'—')+' <span style="font-size:13px;color:var(--muted)">ms</span>';st[1].querySelector('.stat-foot').innerHTML='<span class="cyan">↗</span> Probe ke situs ini';
 st[3].querySelector('.stat-value').textContent=d?'AGENT':'BROWSER';st[3].querySelector('.stat-foot').textContent=d?(d.host||'')+' · '+(d.os||''):(navigator.userAgentData?.platform||navigator.platform)}
 let refreshing=false;async function refresh(){if(document.hidden||refreshing)return;refreshing=true;try{await probe();const b=await browserStats();if(AG.want)await agentPoll();paint(b)}finally{refreshing=false}}

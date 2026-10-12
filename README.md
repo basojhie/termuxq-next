@@ -1,11 +1,11 @@
 # TermuxQ Next
 
-Preview antarmuka (UI mockup) untuk toolkit IT Support TermuxQ. Satu halaman statis, tanpa dependensi dan tanpa backend.
+TermuxQ Next adalah toolkit IT Support berbasis browser. Tool client-side berjalan langsung di browser; pembacaan CPU/RAM/storage/IP penuh memakai Python Agent lokal yang opsional. Menu yang memerlukan kemampuan sistem di luar browser memberikan panduan/perintah untuk disalin, bukan mengeksekusi shell bebas.
 
-> Modul yang bisa berjalan di browser bekerja sungguhan dan diproses lokal. Modul yang butuh Termux (SSH, Git, backup, port, WoL, dll.) menampilkan perintah untuk disalin. Angka di panel Dashboard dan log masih data contoh.
+> Dashboard tidak menggunakan angka resource contoh. Ketika agent tidak terhubung, antarmuka membedakan metrik browser/jaringan dari statistik sistem yang belum tersedia. Log aktivitas menampilkan peristiwa sesi saat ini.
 
 ## Modul aktif di browser
-Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi, localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP ping, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
+Password generator, Hash checker (SHA), Encrypt/Decrypt (AES-GCM), Password Vault (terenkripsi di localStorage), JWT Inspector, Encode/Decode, Notes, To-Do, IT Support Ticket Log (localStorage + JSON import/export), IPv4 Subnet Calculator, Network Info, Live Device, DNS Lookup (Cloudflare DoH), HTTP response test, Speed test (Cloudflare), Traffic latency, Matrix effect, Defense/Privacy checklist.
 
 ## Akses
 https://basojhie.github.io/termuxq-next/

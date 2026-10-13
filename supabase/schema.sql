@@ -1,9 +1,10 @@
 -- TermuxQ Next shared sync table (Supabase SQL Editor)
 -- Only authenticated users may access their own rows.
+-- record_type supports asset, ticket, audit, and setting records.
 
 create table if not exists public.termuxq_records (
   user_id uuid not null references auth.users(id) on delete cascade,
-  record_type text not null check (record_type in ('asset', 'ticket')),
+  record_type text not null check (record_type in ('asset', 'ticket', 'audit', 'setting')),
   record_id text not null check (char_length(record_id) between 1 and 120),
   payload jsonb,
   is_deleted boolean not null default false,

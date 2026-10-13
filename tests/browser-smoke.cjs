@@ -56,12 +56,25 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #asset-link').selectOption('asset-qa-1');
     assert.equal(await page.locator('#modal-app #device').inputValue(), 'QA Workstation · 192.168.1.20 · Zona QA');
     await page.locator('#modal-app #description').fill('Browser automated test');
+    await page.locator('#modal-app #assignee').fill('QA Technician');
+    await page.locator('#modal-app #category').selectOption('Printer');
     await page.locator('#modal-app #ticket-form button[type="submit"]').click();
     assert.match(await page.locator('#modal-app #count').innerText(), /1 tiket tersimpan/);
     await page.locator('#modal-app [data-response]').click();
     assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0].firstResponseAt));
+    await page.locator('#modal-app select[data-status]').selectOption('Waiting');
+    assert.equal(await page.locator('#modal-app select[data-status]').inputValue(), 'Waiting');
+    assert.ok(JSON.parse(await page.evaluate(() => localStorage.getItem('tq_tickets')))[0].waitingReason);
     await page.locator('#modal-app select[data-status]').selectOption('In Progress');
     assert.equal(await page.locator('#modal-app select[data-status]').inputValue(), 'In Progress');
+    assert.match(await page.locator('#modal-app #list').innerText(), /QA Technician/);
+    assert.match(await page.locator('#modal-app #list').innerText(), /Printer/);
+    page.once('dialog', dialog => dialog.accept('Membersihkan roller, uji cetak berhasil.'));
+    await page.locator('#modal-app [data-note]').click();
+    const workflowTicket = await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0]);
+    assert.equal(workflowTicket.comments.length, 1);
+    assert.equal(workflowTicket.comments[0].text, 'Membersihkan roller, uji cetak berhasil.');
+    assert.ok(workflowTicket.statusHistory.some(entry => entry.to === 'Waiting' && entry.reason));
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.locator('#modal-app #export').click()

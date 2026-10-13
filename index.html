@@ -459,6 +459,7 @@ A.sla=r=>{
   }).join('')||'<div class="out">Tidak ada tiket yang cocok. Buat tiket melalui IT Support Ticket Log terlebih dahulu.</div>';
  };
  g('#sla-save').onclick=()=>{
+  if(!workspaceCanAdmin()){g('#sla-config-message').textContent='Hanya Admin workspace yang dapat mengubah pengaturan SLA.';return}
   const start=g('#sla-start').value,end=g('#sla-end').value;
   if(!start||!end||minuteOf(start)>=minuteOf(end)){g('#sla-config-message').textContent='Jam akhir kerja harus setelah jam mulai dalam hari yang sama.';return}
   const workDays=[...r.querySelectorAll('[data-sla-day]:checked')].map(el=>Number(el.dataset.slaDay));
@@ -474,7 +475,9 @@ A.sla=r=>{
   g('#sla-config-message').textContent='Pengaturan disimpan pada browser ini.';draw();
  };
  g('#sla-refresh').onclick=draw;g('#sla-search').oninput=draw;g('#sla-priority-filter').onchange=draw;
- fillForm();draw();
+ fillForm();
+ if(!workspaceCanAdmin()){for(const selector of ['#sla-start','#sla-end','#sla-critical-response','#sla-critical-resolution','#sla-high-response','#sla-high-resolution','#sla-normal-response','#sla-normal-resolution','#sla-low-response','#sla-low-resolution'])g(selector).disabled=true;r.querySelectorAll('[data-sla-day]').forEach(el=>el.disabled=true);g('#sla-save').disabled=true;g('#sla-config-message').textContent='Pengaturan SLA hanya dapat diubah oleh Admin workspace.'}
+ draw();
 };
 
 A.slareport=r=>{

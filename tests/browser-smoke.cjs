@@ -175,7 +175,13 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #sync-login').click();
     await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Login berhasil'));
     await page.locator('#modal-app #sync-now').click();
-    await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Sinkronisasi berhasil'), null, { timeout: 12000 });
+    try {
+      await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Sinkronisasi berhasil'), null, { timeout: 12000 });
+    } catch (error) {
+      const status = await page.locator('#modal-app #sync-status').innerText();
+      const account = await page.locator('#modal-app #sync-account').innerText();
+      throw new Error('Cloud Sync smoke test failed: ' + status + ' | ' + account + ' | ' + error.message);
+    }
     const mockSync = await page.evaluate(() => window.__syncMock);
     assert.ok(mockSync.uploaded.some(row => row.record_type === 'asset' && row.record_id === 'sync-asset-qa' && row.organization_id === mockSync.orgId));
     assert.ok(mockSync.uploaded.some(row => row.record_type === 'ticket' && row.record_id === 'sync-ticket-qa' && row.organization_id === mockSync.orgId));

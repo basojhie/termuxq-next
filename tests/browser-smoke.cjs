@@ -228,7 +228,7 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #sla-list').innerText(), /Penyelesaian terlambat/);
     await page.locator('#modal-app #sla-critical-response').fill('20');
     await page.locator('#modal-app #sla-save').click();
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem((localStorage.getItem('tq_active_org_v1') ? 'tq_sla_config_v1__' + localStorage.getItem('tq_active_org_v1') : 'tq_sla_config_v1'))).targets.Critical.response), 20);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem((JSON.parse(localStorage.getItem('tq_active_org_v1')) ? 'tq_sla_config_v1__' + JSON.parse(localStorage.getItem('tq_active_org_v1')) : 'tq_sla_config_v1'))).targets.Critical.response), 20);
     await page.locator('#modal-app #sla-search').fill('near response deadline');
     assert.match(await page.locator('#modal-app #sla-list').innerText(), /Critical SLA near response deadline/);
     await page.locator('#modal-close').click();

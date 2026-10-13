@@ -88,9 +88,12 @@ jobs:
           for record_type in ["'asset'", "'ticket'", "'audit'", "'setting'"]:
               if record_type not in schema or record_type not in migration:
                   raise SystemExit("Missing record type in schema/migration: " + record_type)
-          for required in ["auth.getUser()", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "sendMessage"]:
+          for required in ["auth.getUser()", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_NOTIFY_ALLOWED_USER_IDS", "SUPABASE_SERVICE_ROLE_KEY", "termuxq_claim_notification_slot", "sendMessage"]:
               if required not in function:
                   raise SystemExit("Edge Function guardrail missing: " + required)
+          for required in ["termuxq_notification_limits", "termuxq_claim_notification_slot", "1 minute", "20"]:
+              if required.lower() not in (schema + migration + function).lower():
+                  raise SystemExit("Telegram anti-abuse control missing: " + required)
           if re.search(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b", function):
               raise SystemExit("A Telegram bot token appears to be hard-coded")
           frontend = Path("index.html").read_text(encoding="utf-8")

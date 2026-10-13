@@ -177,3 +177,7 @@ IT Asset Inventory kini menyimpan hingga 50 hasil ping terakhir per perangkat (w
 
 ### Validasi kualitas fitur baru
 GitHub Actions memeriksa sintaks antarmuka, interaksi browser, tabel/migrasi Supabase, dan pengamanan fungsi Telegram. Peringatan keamanan yang hanya memberitahu pengguna agar tidak memakai service_role bukan credential; pemeriksaan gagal hanya jika nilai credential tampak ditetapkan secara literal.
+
+
+### Telegram hardening (server-side)
+Fungsi Telegram kini menerima hanya UID yang dicantumkan pada secret TELEGRAM_NOTIFY_ALLOWED_USER_IDS (beberapa UID dipisahkan koma). Selain sesi login yang valid, fungsi memakai pembatasan server atomik: minimal 60 detik antar-pengiriman serta maksimal 20 pengiriman per jam per UID. Tabel rate limit hanya dapat diakses role server. Jalankan schema/migration terbaru, lalu set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_NOTIFY_ALLOWED_USER_IDS, dan SUPABASE_SERVICE_ROLE_KEY sebagai Supabase Edge Function secrets. Jangan pernah mengirim service-role key ke browser atau menyimpannya di repository.

@@ -137,7 +137,7 @@ function workspaceDataKey(key){const id=activeWorkspaceId();return id?key+'__'+i
 function workspaceRole(){return activeWorkspaceId()?ls('tq_active_org_role_v1','viewer'):'admin'}
 function workspaceCanWrite(){return !activeWorkspaceId()||workspaceRole()==='admin'||workspaceRole()==='technician'}
 function workspaceCanAdmin(){return !activeWorkspaceId()||workspaceRole()==='admin'}
-function setActiveWorkspace(id,role){const previous=activeWorkspaceId();if(!previous&&id){for(const key of workspaceScopedKeys){const legacy=localStorage.getItem(key),scoped=localStorage.getItem(key+'__'+id);if(legacy!==null&&scoped===null)localStorage.setItem(key+'__'+id,legacy)}}sv('tq_active_org_v1',id);sv('tq_active_org_role_v1',role||'viewer')}
+function setActiveWorkspace(id,role){const previous=activeWorkspaceId();if(!previous&&id){for(const key of workspaceScopedKeys){const legacy=localStorage.getItem(key),scoped=localStorage.getItem(key+'__'+id);if(legacy!==null&&scoped===null)localStorage.setItem(key+'__'+id,legacy)}}localStorage.setItem('tq_active_org_v1',JSON.stringify(id));localStorage.setItem('tq_active_org_role_v1',JSON.stringify(role||'viewer'))}
 
 function auditEvent(action,entity,details){
  if(workspaceRole()==='viewer')return;

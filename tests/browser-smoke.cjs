@@ -186,7 +186,7 @@ const { chromium } = require('playwright');
     assert.ok(mockSync.uploaded.some(row => row.record_type === 'asset' && row.record_id === 'sync-asset-qa' && row.organization_id === mockSync.orgId));
     assert.ok(mockSync.uploaded.some(row => row.record_type === 'ticket' && row.record_id === 'sync-ticket-qa' && row.organization_id === mockSync.orgId));
     assert.ok(mockSync.uploaded.some(row => row.record_type === 'audit' && row.organization_id === mockSync.orgId));
-    assert.equal(await page.evaluate(org => JSON.parse(localStorage.getItem('tq_sync_baseline_v1__' + org)).assets.length, await page.evaluate(() => localStorage.getItem('tq_active_org_v1'))), 1);
+    assert.equal(await page.evaluate(org => JSON.parse(localStorage.getItem('tq_sync_baseline_v1__' + org)).assets.length, await page.evaluate(() => JSON.parse(localStorage.getItem('tq_active_org_v1')))), 1);
     assert.match(await page.locator('#modal-app #sync-account').innerText(), /qa@example.com/);
     await page.locator('#modal-close').click();
 
@@ -201,7 +201,7 @@ const { chromium } = require('playwright');
     // SLA monitor: test business-time targets, breach/risk counters, settings, and ticket timestamps.
     await page.evaluate(() => {
       const now = Date.now();
-      const activeOrg = localStorage.getItem('tq_active_org_v1');
+      const activeOrg = JSON.parse(localStorage.getItem('tq_active_org_v1'));
       const scoped = key => activeOrg ? key + '__' + activeOrg : key;
       localStorage.setItem(scoped('tq_sla_config_v1'), JSON.stringify({
         businessStart:'00:00', businessEnd:'23:59', workDays:[0,1,2,3,4,5,6],
@@ -270,7 +270,7 @@ const { chromium } = require('playwright');
     workspaceBackup.data.tickets.push({id:'backup-import-qa',title:'Restored backup QA',status:'Open',priority:'Normal',category:'Software',createdAt:new Date().toISOString()});
     await page.locator('#modal-app #tb-file').setInputFiles({name:'qa-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(workspaceBackup))});
     await page.waitForFunction(() => document.querySelector('#modal-app #tb-message')?.textContent.includes('Pemulihan berhasil'));
-    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem((localStorage.getItem('tq_active_org_v1') ? 'tq_tickets__' + localStorage.getItem('tq_active_org_v1') : 'tq_tickets'))).some(t => t.id === 'backup-import-qa')));
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem((JSON.parse(localStorage.getItem('tq_active_org_v1')) ? 'tq_tickets__' + JSON.parse(localStorage.getItem('tq_active_org_v1')) : 'tq_tickets'))).some(t => t.id === 'backup-import-qa')));
     await page.locator('#modal-close').click();
 
     // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.

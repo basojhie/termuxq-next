@@ -155,7 +155,7 @@ Menu **SLA & Ticket Priority Monitoring** menghitung target respons pertama dan 
 IT Support Ticket Log mencatat penanggung jawab/teknisi, kategori, catatan troubleshooting, alasan status Waiting, riwayat perpindahan status, waktu pembaruan, dan jumlah tiket yang dibuka kembali. Tiket lama dibaca dengan nilai default; ekspor baru menggunakan skema versi 3 dan membawa catatan serta riwayat status.
 
 ### SLA Reporting & Analytics
-Modul laporan merangkum jumlah tiket aktif, kepatuhan respons/penyelesaian, rata-rata durasi pada jam kerja, tiket yang pernah dibuka kembali, tren harian tujuh hari, dan kategori. Ekspor menghasilkan CSV yang dapat dibuka di Excel. Nilai kepatuhan berdasarkan timestamp dan target SLA yang tersimpan; kalender hari libur/cuti belum didukung.
+Modul laporan merangkum jumlah tiket aktif, kepatuhan respons/penyelesaian, rata-rata durasi pada jam kerja, tiket yang pernah dibuka kembali, dan kategori. Grafik tren dapat diganti antara 7 hari harian, 30 hari harian, atau 90 hari dengan agregasi mingguan. Ekspor menghasilkan CSV yang dapat dibuka di Excel. Nilai kepatuhan berdasarkan timestamp dan target SLA yang tersimpan; kalender hari libur/cuti belum didukung.
 
 ### Ticket Notification Center dan Telegram
 Pusat notifikasi menampilkan tiket Critical/High, deadline respons/penyelesaian yang dekat atau terlewat, serta tiket Waiting lebih dari 24 jam. Desktop notifications memerlukan izin pengguna dan hanya bekerja saat halaman dibuka. Pengiriman Telegram dipicu dengan tombol, memakai sesi Supabase yang valid serta Edge Function server-side.

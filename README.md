@@ -147,3 +147,20 @@ Menu **SLA & Ticket Priority Monitoring** menghitung target respons pertama dan 
 - Saat status tiket berubah menjadi **Resolved**, `resolvedAt` dicatat otomatis. Jika tiket dibuka kembali, waktu selesai dihapus sampai tiket diselesaikan lagi.
 - Dasbor menunjukkan respons/penyelesaian yang melewati target, tenggat dalam 60 menit kerja, dan tiket yang selesai sesuai SLA.
 - Target tersimpan di `tq_sla_config_v1` dan tiket tetap menggunakan penyimpanan lokal. Pengaturan SLA dan hasil tidak otomatis dibagikan ke browser lain hingga alur sinkronisasi digunakan.
+
+
+## Ticket workflow, SLA analytics, dan notifikasi
+
+### Workflow tiket
+IT Support Ticket Log mencatat penanggung jawab/teknisi, kategori, catatan troubleshooting, alasan status Waiting, riwayat perpindahan status, waktu pembaruan, dan jumlah tiket yang dibuka kembali. Tiket lama dibaca dengan nilai default; ekspor baru menggunakan skema versi 3 dan membawa catatan serta riwayat status.
+
+### SLA Reporting & Analytics
+Modul laporan merangkum jumlah tiket aktif, kepatuhan respons/penyelesaian, rata-rata durasi pada jam kerja, tiket yang pernah dibuka kembali, tren harian tujuh hari, dan kategori. Ekspor menghasilkan CSV yang dapat dibuka di Excel. Nilai kepatuhan berdasarkan timestamp dan target SLA yang tersimpan; kalender hari libur/cuti belum didukung.
+
+### Ticket Notification Center dan Telegram
+Pusat notifikasi menampilkan tiket Critical/High, deadline respons/penyelesaian yang dekat atau terlewat, serta tiket Waiting lebih dari 24 jam. Desktop notifications memerlukan izin pengguna dan hanya bekerja saat halaman dibuka. Pengiriman Telegram dipicu dengan tombol, memakai sesi Supabase yang valid serta Edge Function server-side.
+
+Untuk mengaktifkan Telegram, deploy fungsi supabase/functions/ticket-notify/index.ts dan simpan TELEGRAM_BOT_TOKEN serta TELEGRAM_CHAT_ID sebagai Supabase Edge Function secrets. Jangan pernah memasukkan token bot pada HTML, localStorage, atau commit. Endpoint memvalidasi sesi pengguna sebelum mengirim. Pengiriman otomatis saat halaman tertutup belum diaktifkan.
+
+### Perluasan Cloud Sync
+Cloud Sync juga menyertakan Audit Trail (tipe audit) dan konfigurasi SLA (tipe setting dengan ID tetap sla-config). Pada project yang sudah dipakai, jalankan supabase/migrations/20261013_ticket_workflow.sql sekali di SQL Editor. Pada project baru, jalankan supabase/schema.sql yang telah diperbarui. RLS membatasi record kepada akun yang login; versi ini menyinkronkan antar-perangkat dengan akun yang sama, bukan role organisasi lintas akun.

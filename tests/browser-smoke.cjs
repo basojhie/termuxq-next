@@ -62,6 +62,7 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #count').innerText(), /1 tiket tersimpan/);
     await page.locator('#modal-app [data-response]').click();
     assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0].firstResponseAt));
+    page.once('dialog', dialog => dialog.accept('Menunggu spare part'));
     await page.locator('#modal-app select[data-status]').selectOption('Waiting');
     assert.equal(await page.locator('#modal-app select[data-status]').inputValue(), 'Waiting');
     assert.ok(JSON.parse(await page.evaluate(() => localStorage.getItem('tq_tickets')))[0].waitingReason);
@@ -213,6 +214,26 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_sla_config_v1')).targets.Critical.response), 20);
     await page.locator('#modal-app #sla-search').fill('near response deadline');
     assert.match(await page.locator('#modal-app #sla-list').innerText(), /Critical SLA near response deadline/);
+    await page.locator('#modal-close').click();
+
+    // SLA Reporting: summary metrics, trend, and CSV export.
+    await page.locator('[data-module="slareport"]').click();
+    assert.ok(Number(await page.locator('#modal-app #slar-total').innerText()) >= 3);
+    assert.ok(await page.locator('#modal-app #slar-response-rate').count());
+    assert.match(await page.locator('#modal-app #slar-trend').innerText(), /B .*S/);
+    const [slaReportDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#modal-app #slar-export').click()
+    ]);
+    assert.match(slaReportDownload.suggestedFilename(), /^termuxq-sla-report-.*\.csv$/);
+    const slaReportPath = await slaReportDownload.path();
+    assert.match(fs.readFileSync(slaReportPath, 'utf8'), /penanggung jawab/);
+    await page.locator('#modal-close').click();
+
+    // Notification center shows ticket alerts without asking for browser permission.
+    await page.locator('[data-module="notifications"]').click();
+    assert.ok(Number((await page.locator('#modal-app #notify-info').innerText()).match(/\d+/)[0]) >= 1);
+    assert.match(await page.locator('#modal-app #notify-list').innerText(), /Critical|High|Target/);
     await page.locator('#modal-close').click();
 
     // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.

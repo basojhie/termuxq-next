@@ -135,7 +135,7 @@ Modul **Cloud Sync (Supabase)** akan menyatukan data IT Asset Inventory dan IT S
 
 Menu **Audit Trail / Activity Log** mencatat aktivitas penting di browser saat ini, termasuk membuat/mengubah/menghapus tiket, mengubah status tiket, menambah/mengedit/menghapus aset, pemeriksaan ping, impor/ekspor JSON, dan sinkronisasi cloud. Riwayat menyimpan waktu, jenis objek, tindakan, serta ringkasan—bukan password, publishable key, atau isi rahasia.
 
-Riwayat dibatasi hingga 500 aktivitas terakhir, dapat dicari/filter dan diekspor sebagai JSON. Log bersifat lokal per-browser pada `tq_audit_log_v1`; fitur ini belum menyalin audit log ke database Supabase. Gunakan ekspor berkala bila catatan perlu disimpan lebih lama.
+Riwayat dibatasi hingga 500 aktivitas terakhir, dapat dicari/filter dan diekspor sebagai JSON. Log lokal dapat ikut disinkronkan lewat Cloud Sync setelah schema/migration terbaru diterapkan. Gunakan ekspor berkala bila catatan perlu disimpan lebih lama.
 
 
 ## SLA & Ticket Priority Monitoring
@@ -146,7 +146,7 @@ Menu **SLA & Ticket Priority Monitoring** menghitung target respons pertama dan 
 - Pada **IT Support Ticket Log**, tekan **Catat respons** saat petugas memberikan tanggapan pertama. Ini menyimpan `firstResponseAt`.
 - Saat status tiket berubah menjadi **Resolved**, `resolvedAt` dicatat otomatis. Jika tiket dibuka kembali, waktu selesai dihapus sampai tiket diselesaikan lagi.
 - Dasbor menunjukkan respons/penyelesaian yang melewati target, tenggat dalam 60 menit kerja, dan tiket yang selesai sesuai SLA.
-- Target tersimpan di `tq_sla_config_v1` dan tiket tetap menggunakan penyimpanan lokal. Pengaturan SLA dan hasil tidak otomatis dibagikan ke browser lain hingga alur sinkronisasi digunakan.
+- Target tersimpan di `tq_sla_config_v1`. Pengaturan SLA dan data tiket dapat dibagikan antar-browser melalui Cloud Sync setelah schema/migration terbaru diterapkan.
 
 
 ## Ticket workflow, SLA analytics, dan notifikasi
@@ -164,3 +164,12 @@ Untuk mengaktifkan Telegram, deploy fungsi supabase/functions/ticket-notify/inde
 
 ### Perluasan Cloud Sync
 Cloud Sync juga menyertakan Audit Trail (tipe audit) dan konfigurasi SLA (tipe setting dengan ID tetap sla-config). Pada project yang sudah dipakai, jalankan supabase/migrations/20261013_ticket_workflow.sql sekali di SQL Editor. Pada project baru, jalankan supabase/schema.sql yang telah diperbarui. RLS membatasi record kepada akun yang login; versi ini menyinkronkan antar-perangkat dengan akun yang sama, bukan role organisasi lintas akun.
+
+
+## Ticket Backup & Restore
+
+Menu Ticket Backup & Restore membuat satu file JSON dengan tiket, komentar/riwayat tiket, inventaris dan riwayat ping, Audit Trail, serta konfigurasi SLA. Kredensial project Supabase, sesi login, serta token Telegram sengaja dikecualikan. Saat restore, mode gabung menambahkan ID yang belum ada dan mempertahankan item lokal saat ID bentrok; mode ganti seluruh data meminta konfirmasi. Batas maksimum adalah 500 tiket, 500 aset, 500 catatan audit, dan file 10 MB. Simpan backup di lokasi aman dan uji pemulihan sebelum memakai data ini untuk operasi penting.
+
+## Riwayat ping inventaris
+
+IT Asset Inventory kini menyimpan hingga 50 hasil ping terakhir per perangkat (waktu, status, latensi jika tersedia, dan pesan hasil). Riwayat dibawa pada ekspor/impor inventaris dan Cloud Sync. Ping hanya dicatat ketika pengguna memulai pemeriksaan melalui Agent; dashboard tidak menjalankan ping berkala saat browser ditutup.

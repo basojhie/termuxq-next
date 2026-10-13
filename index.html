@@ -111,7 +111,8 @@ modules.push(
  {id:'auditlog',cat:'productivity',icon:'▤',name:'Audit Trail / Activity Log',desc:'Riwayat tindakan penting pada tiket dan inventaris untuk penelusuran troubleshooting.',details:['Mencatat waktu dan ringkasan perubahan pada browser ini.','Mendukung pencarian dan ekspor JSON untuk audit lokal.','Riwayat ini belum disinkronkan ke cloud; data disimpan lokal di browser ini.']},
  {id:'sla',cat:'productivity',icon:'◷',name:'SLA & Ticket Priority Monitoring',desc:'Pantau tenggat respons/penyelesaian berdasarkan prioritas dan kalender jam kerja.',details:['Target SLA dapat diubah per prioritas Critical, High, Normal, dan Low.','Tiket menyediakan pencatatan waktu respons pertama; waktu penyelesaian dicatat saat status menjadi Resolved.','Perhitungan memakai jam kerja dan hari kerja yang dikonfigurasi, dalam zona waktu browser.']},
  {id:'slareport',cat:'productivity',icon:'▥',name:'SLA Reporting & Analytics',desc:'Analisis kepatuhan SLA, rata-rata respons dan penyelesaian, tren 7 hari, kategori, serta ekspor CSV.',details:['Menghitung kepatuhan dari cap waktu tiket dan target SLA yang disimpan.','Menampilkan tren 7 hari dan jumlah tiket menurut kategori.','Ekspor CSV dapat dibuka di Excel untuk analisis lanjutan.']},
- {id:'notifications',cat:'productivity',icon:'♢',name:'Ticket Notification Center',desc:'Lihat peringatan tiket Critical/High, target SLA, dan status Waiting; kirim desktop/Telegram.',details:['Notifikasi desktop memerlukan izin browser dan HTTPS/localhost.','Telegram membutuhkan login Cloud Sync dan Edge Function dengan token bot di secret server.','Pengiriman Telegram dipicu pengguna; token bot tidak disimpan di frontend.']}
+ {id:'notifications',cat:'productivity',icon:'♢',name:'Ticket Notification Center',desc:'Lihat peringatan tiket Critical/High, target SLA, dan status Waiting; kirim desktop/Telegram.',details:['Notifikasi desktop memerlukan izin browser dan HTTPS/localhost.','Telegram membutuhkan login Cloud Sync dan Edge Function dengan token bot di secret server.','Pengiriman Telegram dipicu pengguna; token bot tidak disimpan di frontend.']},
+ {id:'ticketbackup',cat:'productivity',icon:'▣',name:'Ticket Backup & Restore',desc:'Ekspor dan pulihkan tiket, inventaris, audit log, serta pengaturan SLA tanpa menyertakan kredensial.',details:['Cadangan JSON dapat digabungkan atau mengganti data browser setelah konfirmasi.','Kredensial Supabase, sesi login, dan token Telegram tidak ikut diekspor.','Setelah pemulihan, jalankan Cloud Sync secara manual jika dibutuhkan.']}
 );
 const pages={dashboard:{title:'Dashboard & Overview',desc:'Pusat kontrol visual untuk utilitas TermuxQ: diagnostik, produktivitas, maintenance, dan lab pembelajaran.'},network:{title:'Network Tools',desc:'Diagnostik browser nyata: DNS-over-HTTPS, HTTP response test, speed test, dan kalkulator subnet IPv4.'},security:{title:'Security & Tools',desc:'Utilitas untuk hash, password, enkripsi, file, dan inspeksi token. Gunakan dengan menjaga data rahasia.'},productivity:{title:'Productivity',desc:'Catatan, daftar tugas, tiket IT Support, dan pintasan Git/SSH.'},maintenance:{title:'Maintenance & Backup',desc:'Pemeliharaan proyek dengan pemeriksaan, backup, restore, dan pembersihan yang memerlukan kehati-hatian.'},netops:{title:'NetOps Lab',desc:'Ruang alat diagnostik dan administrasi jaringan yang hanya digunakan pada sistem yang kamu miliki atau diberi izin.'},audit:{title:'Security Audit',desc:'Checklist keamanan, evaluasi header web, dan privasi. Indikator demo bukan bukti bahwa sistem aman.'},ctf:{title:'CTF & Recon Lab',desc:'Area belajar keamanan, tantangan CTF, encoding, dan reconnaissance pasif secara bertanggung jawab.'}};
 const nav=document.getElementById('nav'), toolsEl=document.getElementById('tools'), search=document.getElementById('search');let currentPage='dashboard', currentModule=null, lastFocus=null, tm=null;
@@ -583,6 +584,22 @@ A.notifications=r=>{
  draw();tm=setInterval(draw,60000);
 };
 
+A.ticketbackup=r=>{
+ const g=mk(r,'<div class="small">Cadangkan dan pulihkan tiket, inventaris aset, Audit Trail, dan konfigurasi SLA lokal. Kunci Supabase, sesi login, serta token tidak pernah dimasukkan ke cadangan.</div><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><strong>1. Ekspor cadangan</strong><div class="row" style="margin-top:8px"><button class="btn" id="tb-export" type="button">Unduh backup JSON</button><span class="small">Simpan di lokasi aman dan terpisah.</span></div></section><section class="panel" style="padding:12px;margin-top:10px;box-shadow:none"><strong>2. Pulihkan cadangan</strong><label for="tb-mode">Mode pemulihan</label><select id="tb-mode"><option value="merge">Gabungkan ID baru (nilai lokal menang jika ID bentrok)</option><option value="replace">Ganti data lokal dengan cadangan ini</option></select><label class="btn secondary" for="tb-file" style="display:inline-block;margin-top:8px">Pilih file backup JSON<input id="tb-file" type="file" accept=".json,application/json" style="display:none"></label><div id="tb-message" class="small" aria-live="polite" style="margin-top:8px">Belum ada file dipilih.</div></section><div class="out" id="tb-summary" aria-live="polite"></div><div class="small">Catatan: pemulihan mengganti/menggabungkan penyimpanan browser ini saja. Setelah itu jalankan Cloud Sync secara manual jika data harus diselaraskan dengan Supabase.</div>');
+ const keys={tickets:'tq_tickets',assets:'tq_asset_inventory_v1',audit:'tq_audit_log_v1',sla:'tq_sla_config_v1'};
+ const readArray=key=>{const v=ls(key,[]);return Array.isArray(v)?v.filter(x=>x&&typeof x==='object'):[]};
+ const snapshot=()=>({product:'TermuxQ',backupSchemaVersion:1,exportedAt:new Date().toISOString(),data:{tickets:readArray(keys.tickets),assets:readArray(keys.assets),audit:readArray(keys.audit),slaConfig:(()=>{const c=ls(keys.sla,null);return c&&typeof c==='object'?c:null})()},excluded:['Supabase project URL/key','Supabase auth session','Telegram bot token','browser notification permission']});
+ const stats=data=>({tickets:data.tickets.length,assets:data.assets.length,audit:data.audit.length,sla:!!data.slaConfig});
+ const validId=x=>x&&typeof x.id==='string'&&x.id.length>0&&x.id.length<=120;
+ const uniqueMerge=(local,imported,max)=>{const out=local.slice(),ids=new Set(out.filter(validId).map(x=>x.id));for(const item of imported){if(out.length>=max)break;if(!validId(item)||ids.has(item.id))continue;out.push(item);ids.add(item.id)}return out};
+ const renderSummary=()=>{const s=snapshot().data,n=stats(s);g('#tb-summary').textContent='Data saat ini: '+n.tickets+' tiket · '+n.assets+' aset · '+n.audit+' catatan audit · konfigurasi SLA '+(n.sla?'tersedia':'belum diatur')+'.'};
+ g('#tb-export').onclick=()=>{const data=snapshot(),blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-workspace-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor backup','Workspace',data.data.tickets.length+' tiket · '+data.data.assets.length+' aset · '+data.data.audit.length+' log');g('#tb-message').textContent='Cadangan dibuat. Simpan file secara aman.';renderSummary()};
+ g('#tb-file').onchange=async()=>{const file=g('#tb-file').files[0];if(!file)return;try{if(file.size>10*1024*1024)throw new Error('File melebihi batas 10 MB.');const backup=JSON.parse(await file.text());if(!backup||backup.product!=='TermuxQ'||backup.backupSchemaVersion!==1||!backup.data||typeof backup.data!=='object')throw new Error('Format backup TermuxQ tidak dikenali.');const data=backup.data;for(const name of ['tickets','assets','audit']){if(!Array.isArray(data[name]))throw new Error('Backup tidak memiliki array '+name+'.');if(data[name].length>2000)throw new Error('Jumlah '+name+' melebihi batas keamanan.')}if(data.tickets.some(t=>!t||typeof t.title!=='string'||!t.title.trim()||!validId(t)))throw new Error('Data tiket tidak valid.');if(data.assets.some(a=>!a||typeof a.name!=='string'||typeof a.ip!=='string'||!validId(a)))throw new Error('Data aset tidak valid.');if(data.audit.some(a=>!validId(a)||typeof a.action!=='string'))throw new Error('Data audit tidak valid.');if(data.slaConfig!==null&&data.slaConfig!==undefined&&(typeof data.slaConfig!=='object'||Array.isArray(data.slaConfig)))throw new Error('Konfigurasi SLA tidak valid.');const n=stats({tickets:data.tickets,assets:data.assets,audit:data.audit,slaConfig:data.slaConfig});g('#tb-summary').textContent='File valid: '+n.tickets+' tiket · '+n.assets+' aset · '+n.audit+' catatan audit · SLA '+(n.sla?'ada':'tidak ada')+'.';g('#tb-message').textContent='Backup valid. Pilih mode, lalu pilih file ini lagi untuk menerapkan pemulihan.';g('#tb-file').dataset.pending=JSON.stringify(backup)}catch(e){delete g('#tb-file').dataset.pending;g('#tb-message').textContent='Backup ditolak: '+e.message;g('#tb-summary').textContent='Tidak ada data yang diubah.'}};
+ g('#tb-mode').onchange=()=>{const pending=g('#tb-file').dataset.pending;if(pending)g('#tb-message').textContent='Mode '+g('#tb-mode').value+' dipilih. Pilih kembali file backup untuk menjalankan pemulihan.'};
+ g('#tb-file').onchange=async()=>{const file=g('#tb-file').files[0];if(!file)return;try{if(file.size>10*1024*1024)throw new Error('File melebihi batas 10 MB.');const backup=JSON.parse(await file.text());if(!backup||backup.product!=='TermuxQ'||backup.backupSchemaVersion!==1||!backup.data||typeof backup.data!=='object')throw new Error('Format backup TermuxQ tidak dikenali.');const data=backup.data;for(const name of ['tickets','assets','audit']){if(!Array.isArray(data[name])||data[name].length>2000)throw new Error('Data '+name+' tidak valid atau melebihi batas.')}if(data.tickets.some(t=>!t||typeof t.title!=='string'||!t.title.trim()||!validId(t)))throw new Error('Data tiket tidak valid.');if(data.assets.some(a=>!a||typeof a.name!=='string'||typeof a.ip!=='string'||!validId(a)))throw new Error('Data aset tidak valid.');if(data.audit.some(a=>!validId(a)||typeof a.action!=='string'))throw new Error('Data audit tidak valid.');if(data.slaConfig!==null&&data.slaConfig!==undefined&&(typeof data.slaConfig!=='object'||Array.isArray(data.slaConfig)))throw new Error('Konfigurasi SLA tidak valid.');const mode=g('#tb-mode').value;if(mode==='replace'&&!confirm('Ganti semua tiket, aset, Audit Trail, dan SLA lokal dengan isi backup? Ekspor cadangan saat ini terlebih dahulu.'))return;const local={tickets:readArray(keys.tickets),assets:readArray(keys.assets),audit:readArray(keys.audit)},next=mode==='replace'?{tickets:data.tickets.slice(0,500),assets:data.assets.slice(0,500),audit:data.audit.slice(0,500)}:{tickets:uniqueMerge(local.tickets,data.tickets,500),assets:uniqueMerge(local.assets,data.assets,500),audit:uniqueMerge(local.audit,data.audit,500)};if(next.tickets.length>500||next.assets.length>500||next.audit.length>500)throw new Error('Data hasil pemulihan melewati batas 500 item per jenis.');sv(keys.tickets,next.tickets);sv(keys.assets,next.assets);sv(keys.audit,next.audit);if(mode==='replace')sv(keys.sla,data.slaConfig||null);else if(!ls(keys.sla,null)&&data.slaConfig)sv(keys.sla,data.slaConfig);auditEvent('Pulihkan backup','Workspace',mode+' · '+next.tickets.length+' tiket · '+next.assets.length+' aset');g('#tb-message').textContent='Pemulihan berhasil ('+mode+'). Tutup dan buka kembali modul tiket/inventaris untuk menyegarkan tampilan.';g('#tb-summary').textContent='Pulih: '+next.tickets.length+' tiket · '+next.assets.length+' aset · '+next.audit.length+' catatan audit.'}catch(e){g('#tb-message').textContent='Pemulihan gagal: '+e.message;g('#tb-summary').textContent='Tidak ada perubahan tambahan yang dilakukan.'}finally{g('#tb-file').value='';delete g('#tb-file').dataset.pending}};
+ renderSummary();
+};
+
 A.check=r=>{
  const g=mk(r,'<label>Self-test memeriksa kemampuan browser, penyimpanan lokal, Web Crypto, service worker, serta aset yang diperlukan aplikasi. Ini bukan pemindaian keamanan OS.</label><div class="row"><button id="check-run" class="btn" type="button">Jalankan ulang pemeriksaan</button></div><div class="out" id="check-summary" aria-live="polite">Menyiapkan pemeriksaan…</div><div id="check-results"></div>');
  const run=async()=>{
@@ -602,6 +619,7 @@ A.check=r=>{
   add('SLA & Ticket Priority Monitoring',typeof A.sla==='function','Handler modul '+(typeof A.sla==='function'?'terdaftar.':'tidak ditemukan.'));
   add('SLA Reporting & Analytics',typeof A.slareport==='function','Handler modul '+(typeof A.slareport==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Ticket Notification Center',typeof A.notifications==='function','Handler modul '+(typeof A.notifications==='function'?'terdaftar.':'tidak ditemukan.'));
+  add('Ticket Backup & Restore',typeof A.ticketbackup==='function','Handler modul '+(typeof A.ticketbackup==='function'?'terdaftar.':'tidak ditemukan.'));
   add('HTTP Inspector',typeof A.http==='function','Handler modul '+(typeof A.http==='function'?'terdaftar.':'tidak ditemukan.'));
   add('Service Worker API','serviceWorker'in navigator,'Diperlukan untuk cache/offline pada browser yang mendukung.');
   if('serviceWorker'in navigator){
@@ -768,7 +786,7 @@ A.inventory=r=>{
  const allowedTypes=['PC','Laptop','Printer','Server','Network','Other'];
  const allowedStatuses=['Belum dicek','Online','No Reply','Error'];
  if(!Array.isArray(devices))devices=[];
- devices=devices.filter(d=>d&&typeof d.name==='string'&&typeof d.ip==='string');
+ devices=devices.filter(d=>d&&typeof d.name==='string'&&typeof d.ip==='string').map(d=>({...d,pingHistory:(Array.isArray(d.pingHistory)?d.pingHistory:[]).filter(h=>h&&typeof h.at==='string'&&!Number.isNaN(Date.parse(h.at))).slice(-50)}));
  const g=mk(r,'<label>Inventaris perangkat IT. Data tersimpan di browser ini saja. Untuk sinkronisasi antar-browser/perangkat dibutuhkan backend yang belum dipasang.</label>'+
  '<form id="inv-form"><input id="inv-id" type="hidden"><div class="row"><input id="inv-name" maxlength="100" required placeholder="Nama perangkat (contoh: PC Kasir 01)" style="flex:1;min-width:190px"><input id="inv-zone" maxlength="60" placeholder="Zona / lokasi (contoh: Zona 14)" style="flex:1;min-width:150px"></div>'+
  '<div class="row"><input id="inv-ip" maxlength="15" required spellcheck="false" placeholder="IP privat (contoh: 192.168.42.113)" style="flex:1;min-width:210px"><select id="inv-type" style="flex:1;min-width:120px"><option>PC</option><option>Laptop</option><option>Printer</option><option>Server</option><option>Network</option><option>Other</option></select></div>'+
@@ -804,11 +822,13 @@ A.inventory=r=>{
    const color=status==='Online'?'var(--ok)':status==='No Reply'?'var(--red)':status==='Error'?'var(--yellow)':'var(--muted)';
    const checked=d.lastCheckedAt&& !Number.isNaN(Date.parse(d.lastCheckedAt))?new Date(d.lastCheckedAt).toLocaleString('id-ID'):'Belum pernah dicek';
    const latency=Number.isFinite(d.latencyMs)?' · '+d.latencyMs+' ms':'';
+   const history=(Array.isArray(d.pingHistory)?d.pingHistory:[]).slice(-3).reverse().map(h=>{const at=Date.parse(h.at||'');return String(h.status||'Unknown')+' · '+(Number.isFinite(at)?new Date(at).toLocaleString('id-ID'):'waktu tidak valid')+(Number.isFinite(h.latencyMs)?' · '+h.latencyMs+' ms':'')}).join(' | ');
    return '<article class="panel" style="padding:12px;margin-top:9px;box-shadow:none" data-asset="'+esc(d.id)+'">'+
     '<div class="row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><strong>'+esc(d.name)+'</strong><div class="small" style="margin-top:4px">'+esc(d.ip)+' · '+esc(d.zone||'Zona belum diisi')+' · '+esc(allowedTypes.includes(d.type)?d.type:'Other')+'</div></div><span class="mini-tag" style="color:'+color+'">'+esc(status.toUpperCase())+'</span></div>'+
     (d.notes?'<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0;color:var(--muted);font-size:12px">'+esc(d.notes)+'</div>':'')+
     '<div class="small" style="margin:6px 0">Cek terakhir: '+esc(checked+latency)+'</div>'+
     (d.lastMessage?'<div class="small" style="margin:4px 0;overflow-wrap:anywhere">'+esc(d.lastMessage)+'</div>':'')+
+    (history?'<div class="small" style="margin:4px 0;overflow-wrap:anywhere">Riwayat ping ('+(Array.isArray(d.pingHistory)?d.pingHistory.length:0)+'): '+esc(history)+'</div>':'<div class="small" style="margin:4px 0">Belum ada riwayat ping.</div>')+
     '<div class="row" style="margin-top:8px"><button class="btn" type="button" data-asset-ping="'+esc(d.id)+'">Ping</button><button class="btn secondary" type="button" data-asset-edit="'+esc(d.id)+'">Edit</button><button class="btn secondary" type="button" data-asset-delete="'+esc(d.id)+'">Hapus</button></div></article>';
   }).join('')||'<div class="out">Tidak ada perangkat yang sesuai filter. Tambahkan perangkat atau ubah pencarian/zona.</div>';
   r.querySelectorAll('[data-asset-ping]').forEach(button=>button.onclick=async()=>{
@@ -816,7 +836,7 @@ A.inventory=r=>{
    if(!await ensureAgent())return;
    button.disabled=true;message('Memeriksa '+d.name+' ('+d.ip+')…');
    try{await doPing(d);save();auditEvent('Ping perangkat','Aset',d.name+' · '+d.ip+' · '+d.status);draw();message('Pemeriksaan selesai untuk '+d.name+'.')}
-   catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();save();auditEvent('Ping gagal','Aset',d.name+' · '+d.ip+' · '+e.message);draw();message('Ping gagal: '+e.message)}
+   catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();recordPing(d);save();auditEvent('Ping gagal','Aset',d.name+' · '+d.ip+' · '+e.message);draw();message('Ping gagal: '+e.message)}
   });
   r.querySelectorAll('[data-asset-edit]').forEach(button=>button.onclick=()=>{
    const d=devices.find(x=>x.id===button.dataset.assetEdit);if(!d)return;
@@ -838,6 +858,11 @@ A.inventory=r=>{
   if(!AG.pingSupported){message('Agent terhubung tetapi versi lama. Perbarui termuxq_agent.py lalu jalankan ulang.');return false}
   return true;
  };
+ const recordPing= d=>{
+  d.pingHistory=Array.isArray(d.pingHistory)?d.pingHistory:[];
+  d.pingHistory.push({at:d.lastCheckedAt||new Date().toISOString(),status:d.status||'Error',latencyMs:Number.isFinite(d.latencyMs)?d.latencyMs:null,message:String(d.lastMessage||'').slice(0,180)});
+  d.pingHistory=d.pingHistory.slice(-50);
+ };
  const doPing=async d=>{
   const response=await fetch(AG.url+'/ping?host='+encodeURIComponent(d.ip),{cache:'no-store'});
   let data={};
@@ -846,6 +871,7 @@ A.inventory=r=>{
   d.status=data.reachable?'Online':'No Reply';
   d.latencyMs=Number.isFinite(data.latency_ms)?data.latency_ms:null;
   d.lastCheckedAt=new Date().toISOString();d.lastMessage=data.message||'';
+  recordPing(d);
  };
  g('#inv-form').onsubmit=e=>{
   e.preventDefault();
@@ -855,14 +881,14 @@ A.inventory=r=>{
   if(devices.some(d=>d.ip===ip&&d.id!==id)){message('IP '+ip+' sudah terdaftar. Edit perangkat yang sudah ada agar tidak duplikat.');return}
   const existing=devices.find(d=>d.id===id);
   if(!existing&&devices.length>=500){message('Batas 500 perangkat. Ekspor inventaris sebelum mengarsipkan data lama.');return}
-  const item={id:id||(idNew()),name:name.slice(0,100),zone:zone.slice(0,60),ip:ip,type:allowedTypes.includes(type)?type:'Other',notes:notes.slice(0,500),status:existing&&allowedStatuses.includes(existing.status)?existing.status:'Belum dicek',latencyMs:existing&&Number.isFinite(existing.latencyMs)?existing.latencyMs:null,lastCheckedAt:existing?existing.lastCheckedAt||null:null,lastMessage:existing?existing.lastMessage||'':'',createdAt:existing?existing.createdAt||new Date().toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const item={id:id||(idNew()),name:name.slice(0,100),zone:zone.slice(0,60),ip:ip,type:allowedTypes.includes(type)?type:'Other',notes:notes.slice(0,500),status:existing&&allowedStatuses.includes(existing.status)?existing.status:'Belum dicek',latencyMs:existing&&Number.isFinite(existing.latencyMs)?existing.latencyMs:null,lastCheckedAt:existing?existing.lastCheckedAt||null:null,lastMessage:existing?existing.lastMessage||'':'',pingHistory:existing&&Array.isArray(existing.pingHistory)?existing.pingHistory.slice(-50):[],createdAt:existing?existing.createdAt||new Date().toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()};
   if(existing)devices=devices.map(d=>d.id===id?item:d);else devices.unshift(item);
   save();auditEvent(existing?'Edit':'Tambah', 'Aset',item.name+' · '+item.ip+(item.zone?' · '+item.zone:''));resetForm();draw();message(existing?'Perangkat diperbarui.':'Perangkat ditambahkan.');
  };
  g('#inv-cancel').onclick=()=>{resetForm();message('Edit dibatalkan.')};
  g('#inv-search').oninput=draw;g('#inv-zone-filter').onchange=draw;
  g('#inv-export').onclick=()=>{
-  const blob=new Blob([JSON.stringify({schemaVersion:1,exportedAt:new Date().toISOString(),devices:devices},null,2)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({schemaVersion:2,exportedAt:new Date().toISOString(),devices:devices},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-inventory-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor JSON','Aset',devices.length+' aset diekspor');message('Ekspor JSON disiapkan.');
  };
  g('#inv-import').onchange=async()=>{
@@ -876,7 +902,7 @@ A.inventory=r=>{
     const ip=x.ip.trim();if(ips.has(ip)||devices.length>=500){skipped++;continue}
     let id=typeof x.id==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(x.id)?x.id:idNew();if(ids.has(id))id=idNew();
     const status=allowedStatuses.includes(x.status)?x.status:'Belum dicek';
-    devices.push({id,name:x.name.trim().slice(0,100),zone:String(x.zone||'').slice(0,60),ip,type:allowedTypes.includes(x.type)?x.type:'Other',notes:String(x.notes||'').slice(0,500),status,latencyMs:Number.isFinite(x.latencyMs)?x.latencyMs:null,lastCheckedAt:x.lastCheckedAt&&!Number.isNaN(Date.parse(x.lastCheckedAt))?new Date(x.lastCheckedAt).toISOString():null,lastMessage:String(x.lastMessage||'').slice(0,200),createdAt:x.createdAt&&!Number.isNaN(Date.parse(x.createdAt))?new Date(x.createdAt).toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()});
+    devices.push({id,name:x.name.trim().slice(0,100),zone:String(x.zone||'').slice(0,60),ip,type:allowedTypes.includes(x.type)?x.type:'Other',notes:String(x.notes||'').slice(0,500),status,latencyMs:Number.isFinite(x.latencyMs)?x.latencyMs:null,lastCheckedAt:x.lastCheckedAt&&!Number.isNaN(Date.parse(x.lastCheckedAt))?new Date(x.lastCheckedAt).toISOString():null,lastMessage:String(x.lastMessage||'').slice(0,200),pingHistory:Array.isArray(x.pingHistory)?x.pingHistory.filter(h=>h&&typeof h.at==='string'&&!Number.isNaN(Date.parse(h.at))).slice(-50):[],createdAt:x.createdAt&&!Number.isNaN(Date.parse(x.createdAt))?new Date(x.createdAt).toISOString():new Date().toISOString(),updatedAt:new Date().toISOString()});
     ips.add(ip);ids.add(id);added++;
    }
    save();draw();if(added)auditEvent('Impor JSON','Aset',added+' aset ditambahkan; '+skipped+' dilewati');message('Impor selesai: '+added+' perangkat ditambahkan, '+skipped+' dilewati (data tidak valid/duplikat/batas kapasitas).');
@@ -894,7 +920,7 @@ A.inventory=r=>{
    while(next<targets.length){
     const d=targets[next++];
     try{await doPing(d);if(d.status==='Online')online++}
-    catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();errors++}
+    catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();recordPing(d);errors++}
     done++;g('#inv-info').textContent='Pemeriksaan '+done+'/'+targets.length+' · online '+online+' · error '+errors;
    }
   };

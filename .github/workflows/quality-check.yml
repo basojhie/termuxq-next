@@ -73,6 +73,31 @@ jobs:
           python3 -m py_compile termuxq_agent.py
           python3 -m unittest discover -s tests -p "test_*.py" -v
 
+      - name: Validate Supabase schema and notification guardrails
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          schema = Path("supabase/schema.sql").read_text(encoding="utf-8")
+          migration = Path("supabase/migrations/20261013_ticket_workflow.sql").read_text(encoding="utf-8")
+          fn_path = Path("supabase/functions/ticket-notify/index.ts")
+          if not fn_path.is_file():
+              raise SystemExit("Missing Telegram ticket-notify Edge Function")
+          function = fn_path.read_text(encoding="utf-8")
+          for record_type in ["'asset'", "'ticket'", "'audit'", "'setting'"]:
+              if record_type not in schema or record_type not in migration:
+                  raise SystemExit("Missing record type in schema/migration: " + record_type)
+          for required in ["auth.getUser()", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "sendMessage"]:
+              if required not in function:
+                  raise SystemExit("Edge Function guardrail missing: " + required)
+          if re.search(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b", function):
+              raise SystemExit("A Telegram bot token appears to be hard-coded")
+          if "service_role" in Path("index.html").read_text(encoding="utf-8"):
+              raise SystemExit("The public frontend must not refer to or embed a service_role credential")
+          print("Supabase record types and server-side Telegram auth/secret guardrails validated.")
+          PY
+
       - name: Install Playwright
         run: npm install --no-save playwright
 

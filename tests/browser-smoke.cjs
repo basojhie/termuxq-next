@@ -236,6 +236,26 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #notify-list').innerText(), /Critical|High|Target/);
     await page.locator('#modal-close').click();
 
+    // Ticket Backup & Restore: portable JSON, excludes auth credentials, and supports merge restore.
+    await page.locator('[data-module="ticketbackup"]').click();
+    const [workspaceBackupDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#modal-app #tb-export').click()
+    ]);
+    assert.match(workspaceBackupDownload.suggestedFilename(), /^termuxq-workspace-backup-.*\.json$/);
+    const backupPath = await workspaceBackupDownload.path();
+    const workspaceBackup = JSON.parse(fs.readFileSync(backupPath, 'utf8'));
+    assert.equal(workspaceBackup.product, 'TermuxQ');
+    assert.ok(Array.isArray(workspaceBackup.data.tickets));
+    assert.ok(Array.isArray(workspaceBackup.data.assets));
+    assert.ok(Array.isArray(workspaceBackup.data.audit));
+    assert.ok(!Object.hasOwn(workspaceBackup.data, 'syncConfig'));
+    workspaceBackup.data.tickets.push({id:'backup-import-qa',title:'Restored backup QA',status:'Open',priority:'Normal',category:'Software',createdAt:new Date().toISOString()});
+    await page.locator('#modal-app #tb-file').setInputFiles({name:'qa-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(workspaceBackup))});
+    await page.waitForFunction(() => document.querySelector('#modal-app #tb-message')?.textContent.includes('Pemulihan berhasil'));
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets')).some(t => t.id === 'backup-import-qa')));
+    await page.locator('#modal-close').click();
+
     // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.
     await page.locator('[data-module="auditlog"]').click();
     const auditText = await page.locator('#modal-app #audit-list').innerText();

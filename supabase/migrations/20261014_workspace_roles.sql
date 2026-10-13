@@ -26,9 +26,15 @@ insert into public.termuxq_organization_members(organization_id,user_id,email,ro
 select o.id,o.created_by,coalesce(u.email,''),'admin' from public.termuxq_organizations o join auth.users u on u.id=o.created_by
 where o.name='TermuxQ Personal' on conflict(organization_id,user_id) do nothing;
 
-do $$ begin
- if exists(select 1 from pg_constraint where conrelid='public.termuxq_records'::regclass and contype='p') then
-  execute (select 'alter table public.termuxq_records drop constraint '||quote_ident(conname) from pg_constraint where conrelid='public.termuxq_records'::regclass and contype='p' limit 1);
+do $$
+declare v_pk text;
+begin
+ select conname into v_pk
+ from pg_constraint
+ where conrelid='public.termuxq_records'::regclass and contype='p'
+ limit 1;
+ if v_pk is not null then
+  execute format('alter table public.termuxq_records drop constraint %I',v_pk);
  end if;
 end; $$;
 alter table public.termuxq_records alter column organization_id set not null;

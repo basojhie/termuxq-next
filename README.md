@@ -190,3 +190,7 @@ TermuxQ kini memiliki workspace Supabase dengan role yang ditegakkan oleh Row Le
 Pada project Supabase lama, jalankan migrasi berurutan: supabase/migrations/20261013_ticket_workflow.sql lalu supabase/migrations/20261014_workspace_roles.sql. Migrasi kedua membuat workspace pribadi bagi pemilik record lama dan mempertahankan payload/tombstone dengan primary key per-workspace. Pada project baru, gunakan supabase/schema.sql. Deploy Edge Function dengan perintah supabase functions deploy team-admin. Secret SUPABASE_SERVICE_ROLE_KEY tetap di server, bukan di HTML atau browser. Undangan email memerlukan SMTP/Auth Supabase yang benar.
 
 Buka modul Team Access untuk membuat workspace, memilih workspace aktif, mengundang anggota berdasarkan email, mengubah role, atau menghapus anggota. Data lokal dipisahkan per workspace di browser; jalankan Cloud Sync setelah memilih workspace untuk mengunggah atau mengambil datanya.
+
+
+### Setelah deploy kode
+Perubahan kode tersedia pada GitHub Pages, tetapi konfigurasi Supabase di project pribadimu tidak dapat diterapkan dari repository. Untuk mengaktifkan Team Access antar-akun, jalankan migrasi yang disebut di bagian Workspace melalui Supabase SQL Editor terlebih dahulu, lalu deploy `team-admin` dan periksa pengaturan email Auth/SMTP. Telegram memerlukan secret server dan UID allowlist. Tanpa langkah backend ini, modul akan menampilkan pesan bahwa workspace belum siap; jangan menganggap sinkronisasi cloud lintas-akun sudah aktif hanya karena halaman berhasil dibuka.

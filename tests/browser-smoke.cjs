@@ -196,6 +196,17 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #ta-role').innerText(), /Role admin/);
     assert.equal(await page.locator('#modal-app #ta-count').innerText(), '1');
     assert.match(await page.locator('#modal-app #ta-members').innerText(), /qa@example.com/);
+    await page.locator('#modal-app #ta-email').fill('viewer@example.com');
+    await page.locator('#modal-app #ta-invite-role').selectOption('viewer');
+    await page.locator('#modal-app #ta-invite-form button[type="submit"]').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app #ta-count')?.textContent === '2', null, { timeout: 12000 });
+    assert.match(await page.locator('#modal-app #ta-members').innerText(), /viewer@example.com/);
+    await page.locator('#modal-app [data-ta-role="cccccccc-cccc-4ccc-8ccc-cccccccccccc"]').selectOption('technician');
+    await page.locator('#modal-app [data-ta-save="cccccccc-cccc-4ccc-8ccc-cccccccccccc"]').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app [data-ta-role="cccccccc-cccc-4ccc-8ccc-cccccccccccc"]')?.value === 'technician', null, { timeout: 12000 });
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#modal-app [data-ta-remove="cccccccc-cccc-4ccc-8ccc-cccccccccccc"]').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app #ta-count')?.textContent === '1', null, { timeout: 12000 });
     await page.locator('#modal-close').click();
 
     // SLA monitor: test business-time targets, breach/risk counters, settings, and ticket timestamps.

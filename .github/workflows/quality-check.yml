@@ -93,8 +93,10 @@ jobs:
                   raise SystemExit("Edge Function guardrail missing: " + required)
           if re.search(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b", function):
               raise SystemExit("A Telegram bot token appears to be hard-coded")
-          if "service_role" in Path("index.html").read_text(encoding="utf-8"):
-              raise SystemExit("The public frontend must not refer to or embed a service_role credential")
+          frontend = Path("index.html").read_text(encoding="utf-8")
+          # Security guidance may mention service_role safely; only fail if a key-like literal is assigned.
+          if re.search(r"""(?:service_role|SERVICE_ROLE_KEY)\s*[:=]\s*['"][^'"]{20,}['"]""", frontend, flags=re.I):
+              raise SystemExit("A service_role credential appears to be hard-coded")
           print("Supabase record types and server-side Telegram auth/secret guardrails validated.")
           PY
 

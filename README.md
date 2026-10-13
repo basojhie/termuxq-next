@@ -173,3 +173,7 @@ Menu Ticket Backup & Restore membuat satu file JSON dengan tiket, komentar/riway
 ## Riwayat ping inventaris
 
 IT Asset Inventory kini menyimpan hingga 50 hasil ping terakhir per perangkat (waktu, status, latensi jika tersedia, dan pesan hasil). Riwayat dibawa pada ekspor/impor inventaris dan Cloud Sync. Ping hanya dicatat ketika pengguna memulai pemeriksaan melalui Agent; dashboard tidak menjalankan ping berkala saat browser ditutup.
+
+
+### Validasi kualitas fitur baru
+GitHub Actions memeriksa sintaks antarmuka, interaksi browser, tabel/migrasi Supabase, dan pengamanan fungsi Telegram. Peringatan keamanan yang hanya memberitahu pengguna agar tidak memakai service_role bukan credential; pemeriksaan gagal hanya jika nilai credential tampak ditetapkan secara literal.

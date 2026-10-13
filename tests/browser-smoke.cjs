@@ -186,6 +186,7 @@ const { chromium } = require('playwright');
 
     // Team Access: the signed-in user sees their workspace, role, roster, and admin controls.
     await page.locator('[data-module="teamaccess"]').click();
+    await page.waitForFunction(() => document.querySelector('#modal-app #ta-role')?.textContent.includes('Role admin'), null, { timeout: 12000 });
     assert.match(await page.locator('#modal-app #ta-role').innerText(), /Role admin/);
     assert.equal(await page.locator('#modal-app #ta-count').innerText(), '1');
     assert.match(await page.locator('#modal-app #ta-members').innerText(), /qa@example.com/);

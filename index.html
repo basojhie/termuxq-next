@@ -647,7 +647,7 @@ A.tickets=r=>{
  g('#q').oninput=draw;g('#filter').onchange=draw;g('#priority-filter').onchange=draw;
  g('#ticket-report').onclick=()=>{const byStatus=statuses.map(s=>s+': '+tickets.filter(t=>t.status===s).length).join(' · '),byPriority=priorities.map(p=>p+': '+tickets.filter(t=>t.priority===p&&t.status!=='Resolved').length).join(' · ');g('#message').textContent='Ringkasan tiket — '+byStatus+' | Aktif per prioritas: '+byPriority};
  g('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schemaVersion:3,exportedAt:new Date().toISOString(),tickets:tickets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-tickets-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor JSON','Tiket',tickets.length+' tiket diekspor');g('#message').textContent='Ekspor JSON disiapkan.'};
- g('#import').onchange=async()=>{const file=g('#import').files[0];if(!file)return;try{const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.tickets;if(!Array.isArray(items))throw new Error('Berkas harus berupa array tiket atau objek yang memiliki properti tickets.');const known=new Set(tickets.map(t=>String(t.id)));let added=0;for(const x of items.slice(0,500)){if(tickets.length>=500)break;if(!x||typeof x.title!=='string'||!x.title.trim())continue;const id=String(x.id||idNew()).slice(0,80);if(known.has(id))continue;const linked=x.assetRef&&typeof x.assetRef.name==='string'?{id:String(x.assetRef.id||'').slice(0,80),name:x.assetRef.name.slice(0,100),ip:String(x.assetRef.ip||'').slice(0,45),zone:String(x.assetRef.zone||'').slice(0,60)}:null,createdAt=!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString();const comments=Array.isArray(x.comments)?x.comments.filter(c=>c&&typeof c.text==='string').slice(-100).map(c=>({id:String(c.id||idNew()).slice(0,80),at:!Number.isNaN(Date.parse(c.at||''))?new Date(c.at).toISOString():createdAt,by:String(c.by||'Teknisi').slice(0,100),text:c.text.slice(0,1500)})):[],statusHistory=Array.isArray(x.statusHistory)?x.statusHistory.filter(h=>h&&typeof h.to==='string').slice(-100).map(h=>({from:statuses.includes(h.from)?h.from:null,to:statuses.includes(h.to)?h.to:'Open',at:!Number.isNaN(Date.parse(h.at||''))?new Date(h.at).toISOString():createdAt,reason:String(h.reason||'').slice(0,300)})):[];tickets.push({id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',category:categories.includes(x.category)?x.category:'Other',assignee:String(x.assignee||'').slice(0,100),description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt,updatedAt:!Number.isNaN(Date.parse(x.updatedAt||''))?new Date(x.updatedAt).toISOString():createdAt,firstResponseAt:x.firstResponseAt&&!Number.isNaN(Date.parse(x.firstResponseAt))?new Date(x.firstResponseAt).toISOString():null,resolvedAt:x.resolvedAt&&!Number.isNaN(Date.parse(x.resolvedAt))?new Date(x.resolvedAt).toISOString():null,reopenedAt:x.reopenedAt&&!Number.isNaN(Date.parse(x.reopenedAt))?new Date(x.reopenedAt).toISOString():null,reopenCount:Number.isInteger(x.reopenCount)&&x.reopenCount>=0?Math.min(x.reopenCount,1000):0,waitingReason:String(x.waitingReason||'').slice(0,300),comments,statusHistory});known.add(id);added++}save();draw();if(added)auditEvent('Impor JSON','Tiket',added+' tiket ditambahkan');g('#message').textContent='Impor selesai: '+added+' tiket baru.'}catch(err){g('#message').textContent='Impor gagal: '+err.message}finally{g('#import').value=''}};
+ g('#import').onchange=async()=>{if(!workspaceCanWrite()){g('#message').textContent='Role Viewer tidak dapat mengimpor tiket.';g('#import').value='';return}const file=g('#import').files[0];if(!file)return;try{const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.tickets;if(!Array.isArray(items))throw new Error('Berkas harus berupa array tiket atau objek yang memiliki properti tickets.');const known=new Set(tickets.map(t=>String(t.id)));let added=0;for(const x of items.slice(0,500)){if(tickets.length>=500)break;if(!x||typeof x.title!=='string'||!x.title.trim())continue;const id=String(x.id||idNew()).slice(0,80);if(known.has(id))continue;const linked=x.assetRef&&typeof x.assetRef.name==='string'?{id:String(x.assetRef.id||'').slice(0,80),name:x.assetRef.name.slice(0,100),ip:String(x.assetRef.ip||'').slice(0,45),zone:String(x.assetRef.zone||'').slice(0,60)}:null,createdAt=!Number.isNaN(Date.parse(x.createdAt||''))?new Date(x.createdAt).toISOString():new Date().toISOString();const comments=Array.isArray(x.comments)?x.comments.filter(c=>c&&typeof c.text==='string').slice(-100).map(c=>({id:String(c.id||idNew()).slice(0,80),at:!Number.isNaN(Date.parse(c.at||''))?new Date(c.at).toISOString():createdAt,by:String(c.by||'Teknisi').slice(0,100),text:c.text.slice(0,1500)})):[],statusHistory=Array.isArray(x.statusHistory)?x.statusHistory.filter(h=>h&&typeof h.to==='string').slice(-100).map(h=>({from:statuses.includes(h.from)?h.from:null,to:statuses.includes(h.to)?h.to:'Open',at:!Number.isNaN(Date.parse(h.at||''))?new Date(h.at).toISOString():createdAt,reason:String(h.reason||'').slice(0,300)})):[];tickets.push({id,title:x.title.trim().slice(0,120),device:String(x.device||'').slice(0,140),assetRef:linked,priority:priorities.includes(x.priority)?x.priority:'Normal',category:categories.includes(x.category)?x.category:'Other',assignee:String(x.assignee||'').slice(0,100),description:String(x.description||'').slice(0,2000),status:statuses.includes(x.status)?x.status:'Open',createdAt,updatedAt:!Number.isNaN(Date.parse(x.updatedAt||''))?new Date(x.updatedAt).toISOString():createdAt,firstResponseAt:x.firstResponseAt&&!Number.isNaN(Date.parse(x.firstResponseAt))?new Date(x.firstResponseAt).toISOString():null,resolvedAt:x.resolvedAt&&!Number.isNaN(Date.parse(x.resolvedAt))?new Date(x.resolvedAt).toISOString():null,reopenedAt:x.reopenedAt&&!Number.isNaN(Date.parse(x.reopenedAt))?new Date(x.reopenedAt).toISOString():null,reopenCount:Number.isInteger(x.reopenCount)&&x.reopenCount>=0?Math.min(x.reopenCount,1000):0,waitingReason:String(x.waitingReason||'').slice(0,300),comments,statusHistory});known.add(id);added++}save();draw();if(added)auditEvent('Impor JSON','Tiket',added+' tiket ditambahkan');g('#message').textContent='Impor selesai: '+added+' tiket baru.'}catch(err){g('#message').textContent='Impor gagal: '+err.message}finally{g('#import').value=''}};
  refreshAssetOptions();draw();
 };
 
@@ -778,7 +778,9 @@ A.inventory=r=>{
     (history?'<div class="small" style="margin:4px 0;overflow-wrap:anywhere">Riwayat ping ('+(Array.isArray(d.pingHistory)?d.pingHistory.length:0)+'): '+esc(history)+'</div>':'<div class="small" style="margin:4px 0">Belum ada riwayat ping.</div>')+
     '<div class="row" style="margin-top:8px"><button class="btn" type="button" data-asset-ping="'+esc(d.id)+'">Ping</button><button class="btn secondary" type="button" data-asset-edit="'+esc(d.id)+'">Edit</button><button class="btn secondary" type="button" data-asset-delete="'+esc(d.id)+'">Hapus</button></div></article>';
   }).join('')||'<div class="out">Tidak ada perangkat yang sesuai filter. Tambahkan perangkat atau ubah pencarian/zona.</div>';
+  if(!workspaceCanWrite()){g('#inv-submit').disabled=true;g('#inv-import').disabled=true;g('#inv-ping-visible').disabled=true;r.querySelectorAll('[data-asset-ping],[data-asset-edit],[data-asset-delete]').forEach(button=>button.disabled=true)}
   r.querySelectorAll('[data-asset-ping]').forEach(button=>button.onclick=async()=>{
+   if(!workspaceCanWrite()){message('Role Viewer tidak dapat mengubah riwayat ping.');return}
    const d=devices.find(x=>x.id===button.dataset.assetPing);if(!d)return;
    if(!await ensureAgent())return;
    button.disabled=true;message('Memeriksa '+d.name+' ('+d.ip+')…');
@@ -786,11 +788,13 @@ A.inventory=r=>{
    catch(e){d.status='Error';d.lastMessage=e.message;d.lastCheckedAt=new Date().toISOString();recordPing(d);save();auditEvent('Ping gagal','Aset',d.name+' · '+d.ip+' · '+e.message);draw();message('Ping gagal: '+e.message)}
   });
   r.querySelectorAll('[data-asset-edit]').forEach(button=>button.onclick=()=>{
+   if(!workspaceCanWrite())return;
    const d=devices.find(x=>x.id===button.dataset.assetEdit);if(!d)return;
    g('#inv-id').value=d.id;g('#inv-name').value=d.name;g('#inv-zone').value=d.zone||'';g('#inv-ip').value=d.ip;g('#inv-type').value=allowedTypes.includes(d.type)?d.type:'Other';g('#inv-notes').value=d.notes||'';
    g('#inv-submit').textContent='Simpan perubahan';g('#inv-cancel').hidden=false;message('Mode edit: '+d.name);g('#inv-form').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
   r.querySelectorAll('[data-asset-delete]').forEach(button=>button.onclick=()=>{
+   if(!workspaceCanWrite())return;
    const d=devices.find(x=>x.id===button.dataset.assetDelete);if(!d)return;
    if(!confirm('Hapus perangkat "'+d.name+'" dari inventaris lokal?'))return;
    auditEvent('Hapus','Aset',d.name+' · '+d.ip);devices=devices.filter(x=>x.id!==d.id);save();draw();message('Perangkat dihapus.');
@@ -821,7 +825,7 @@ A.inventory=r=>{
   recordPing(d);
  };
  g('#inv-form').onsubmit=e=>{
-  e.preventDefault();
+  e.preventDefault();if(!workspaceCanWrite()){message('Role Viewer hanya dapat membaca inventaris workspace ini.');return}
   const id=g('#inv-id').value,name=g('#inv-name').value.trim(),zone=g('#inv-zone').value.trim(),ip=g('#inv-ip').value.trim(),type=g('#inv-type').value,notes=g('#inv-notes').value.trim();
   if(!name){message('Nama perangkat wajib diisi.');return}
   if(!validPrivateIPv4(ip)){message('Masukkan IP privat RFC1918 yang valid (10.x.x.x, 172.16–31.x.x, atau 192.168.x.x).');return}
@@ -839,6 +843,7 @@ A.inventory=r=>{
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='termuxq-inventory-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);auditEvent('Ekspor JSON','Aset',devices.length+' aset diekspor');message('Ekspor JSON disiapkan.');
  };
  g('#inv-import').onchange=async()=>{
+  if(!workspaceCanWrite()){message('Role Viewer tidak dapat mengimpor inventaris.');g('#inv-import').value='';return}
   const file=g('#inv-import').files[0];if(!file)return;
   try{
    const parsed=JSON.parse(await file.text()),items=Array.isArray(parsed)?parsed:parsed.devices;
@@ -857,6 +862,7 @@ A.inventory=r=>{
   finally{g('#inv-import').value=''}
  };
  g('#inv-ping-visible').onclick=async()=>{
+  if(!workspaceCanWrite()){message('Role Viewer tidak dapat mengubah hasil ping.');return}
   const targets=filtered();
   if(!targets.length){message('Tidak ada perangkat yang cocok untuk diperiksa.');return}
   if(targets.length>24){message('Ada '+targets.length+' perangkat tampil. Filter pencarian/zona hingga maksimal 24 perangkat per batch.');return}

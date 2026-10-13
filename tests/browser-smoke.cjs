@@ -155,7 +155,7 @@ const { chromium } = require('playwright');
     await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', route => route.fulfill({
       status: 200,
       contentType: 'application/javascript',
-      body: "window.__syncMock={session:null,remote:[],uploaded:[]};\nwindow.supabase={createClient:function(){\n const mock=window.__syncMock;\n return {auth:{\n  getSession:async()=>({data:{session:mock.session},error:null}),\n  signInWithPassword:async({email,password})=>{if(!email||!password)return {data:{session:null},error:{message:'missing login'}};mock.session={access_token:'mock-session',user:{id:'11111111-2222-4333-8444-555555555555',email}};return {data:{session:mock.session,user:mock.session.user},error:null}},\n  signUp:async({email})=>({data:{session:null,user:{email}},error:null}),\n  signOut:async()=>{mock.session=null;return {error:null}}\n },from:function(){\n  const builder={select:function(){return this},eq:function(){return this},order:function(){return this},\n   range:async function(start,end){return {data:mock.remote.slice(start,end+1),error:null}},\n   upsert:async function(rows){mock.uploaded.push(...rows);for(const row of rows){const i=mock.remote.findIndex(x=>x.user_id===row.user_id&&x.record_type===row.record_type&&x.record_id===row.record_id);if(i<0)mock.remote.push(row);else mock.remote[i]=row}return {data:null,error:null}}\n  };return builder\n }};\n}};"
+      body: "window.__syncMock={orgId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',userId:'11111111-2222-4333-8444-555555555555',session:null,members:[],remote:[],uploaded:[]};\nwindow.__syncMock.members=[{organization_id:window.__syncMock.orgId,user_id:window.__syncMock.userId,email:'qa@example.com',role:'admin',created_at:new Date().toISOString(),termuxq_organizations:{name:'QA Workspace',created_at:new Date().toISOString()}}];\nwindow.supabase={createClient:function(){\n const mock=window.__syncMock;\n const client={auth:{\n  getSession:async()=>({data:{session:mock.session},error:null}),\n  signInWithPassword:async({email,password})=>{if(!email||!password)return {data:{session:null},error:{message:'missing login'}};mock.session={access_token:'mock-session',user:{id:mock.userId,email}};return {data:{session:mock.session,user:mock.session.user},error:null}},\n  signUp:async({email})=>({data:{session:null,user:{email}},error:null}),\n  signOut:async()=>{mock.session=null;return {error:null}}\n },rpc:async function(name,args){if(name==='termuxq_create_org'){const id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';mock.members.push({organization_id:id,user_id:mock.userId,email:'qa@example.com',role:'admin',created_at:new Date().toISOString(),termuxq_organizations:{name:args.p_name,created_at:new Date().toISOString()}});return {data:id,error:null}}return {data:null,error:{message:'unknown rpc'}}},\n functions:{invoke:async function(name,args){if(name!=='team-admin')return {data:null,error:{message:'unknown function'}};const p=args.body;if(p.action==='invite'){mock.members.push({organization_id:p.organizationId,user_id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',email:p.email,role:p.role,created_at:new Date().toISOString(),termuxq_organizations:{name:'QA Workspace',created_at:new Date().toISOString()}});return {data:{ok:true,invited:false,email:p.email,role:p.role},error:null}}if(p.action==='set_role'){const m=mock.members.find(x=>x.organization_id===p.organizationId&&x.user_id===p.userId);if(m)m.role=p.role;return {data:{ok:true,role:p.role},error:null}}if(p.action==='remove'){mock.members=mock.members.filter(x=>x.user_id!==p.userId);return {data:{ok:true},error:null}}return {data:null,error:{message:'unknown action'}}}},\n from:function(table){const filters=[];const builder={select:function(){return this},eq:function(key,value){filters.push([key,value]);return this},order:function(){return this},range:async function(start,end){let rows=table==='termuxq_organization_members'?mock.members:table==='termuxq_records'?mock.remote:[];rows=rows.filter(row=>filters.every(([key,value])=>row[key]===value));return {data:rows.slice(start,end+1),error:null}},upsert:async function(rows){mock.uploaded.push(...rows);for(const row of rows){const i=mock.remote.findIndex(x=>x.organization_id===row.organization_id&&x.record_type===row.record_type&&x.record_id===row.record_id);if(i<0)mock.remote.push(row);else mock.remote[i]=row}return {data:null,error:null}}};return builder}\n };return client\n}};"
     }));
     await page.evaluate(() => {
       localStorage.setItem('tq_asset_inventory_v1', JSON.stringify([
@@ -177,16 +177,26 @@ const { chromium } = require('playwright');
     await page.locator('#modal-app #sync-now').click();
     await page.waitForFunction(() => document.querySelector('#modal-app #sync-status')?.textContent.includes('Sinkronisasi berhasil'), null, { timeout: 12000 });
     const mockSync = await page.evaluate(() => window.__syncMock);
-    assert.ok(mockSync.uploaded.some(row => row.record_type === 'asset' && row.record_id === 'sync-asset-qa'));
-    assert.ok(mockSync.uploaded.some(row => row.record_type === 'ticket' && row.record_id === 'sync-ticket-qa'));
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_sync_baseline_v1')).assets.length), 1);
+    assert.ok(mockSync.uploaded.some(row => row.record_type === 'asset' && row.record_id === 'sync-asset-qa' && row.organization_id === mockSync.orgId));
+    assert.ok(mockSync.uploaded.some(row => row.record_type === 'ticket' && row.record_id === 'sync-ticket-qa' && row.organization_id === mockSync.orgId));
+    assert.ok(mockSync.uploaded.some(row => row.record_type === 'audit' && row.organization_id === mockSync.orgId));
+    assert.equal(await page.evaluate(org => JSON.parse(localStorage.getItem('tq_sync_baseline_v1__' + org)).assets.length, await page.evaluate(() => localStorage.getItem('tq_active_org_v1'))), 1);
     assert.match(await page.locator('#modal-app #sync-account').innerText(), /qa@example.com/);
+    await page.locator('#modal-close').click();
+
+    // Team Access: the signed-in user sees their workspace, role, roster, and admin controls.
+    await page.locator('[data-module="teamaccess"]').click();
+    assert.match(await page.locator('#modal-app #ta-role').innerText(), /Role admin/);
+    assert.equal(await page.locator('#modal-app #ta-count').innerText(), '1');
+    assert.match(await page.locator('#modal-app #ta-members').innerText(), /qa@example.com/);
     await page.locator('#modal-close').click();
 
     // SLA monitor: test business-time targets, breach/risk counters, settings, and ticket timestamps.
     await page.evaluate(() => {
       const now = Date.now();
-      localStorage.setItem('tq_sla_config_v1', JSON.stringify({
+      const activeOrg = localStorage.getItem('tq_active_org_v1');
+      const scoped = key => activeOrg ? key + '__' + activeOrg : key;
+      localStorage.setItem(scoped('tq_sla_config_v1'), JSON.stringify({
         businessStart:'00:00', businessEnd:'23:59', workDays:[0,1,2,3,4,5,6],
         targets:{
           Critical:{response:15,resolution:120},
@@ -195,7 +205,7 @@ const { chromium } = require('playwright');
           Low:{response:480,resolution:1440}
         }
       }));
-      localStorage.setItem('tq_tickets', JSON.stringify([
+      localStorage.setItem(scoped('tq_tickets'), JSON.stringify([
         {id:'sla-late',title:'Critical SLA overdue',device:'QA Workstation',priority:'Critical',status:'Open',createdAt:new Date(now-10*86400000).toISOString(),firstResponseAt:null,resolvedAt:null},
         {id:'sla-risk',title:'Critical SLA near response deadline',device:'Ops Printer',priority:'Critical',status:'Open',createdAt:new Date(now-8*60000).toISOString(),firstResponseAt:null,resolvedAt:null},
         {id:'sla-resolved',title:'Resolved within SLA',device:'Ops Laptop',priority:'Critical',status:'Resolved',createdAt:new Date(now-45*60000).toISOString(),firstResponseAt:new Date(now-40*60000).toISOString(),resolvedAt:new Date(now-10*60000).toISOString()}
@@ -211,7 +221,7 @@ const { chromium } = require('playwright');
     assert.match(await page.locator('#modal-app #sla-list').innerText(), /Penyelesaian terlambat/);
     await page.locator('#modal-app #sla-critical-response').fill('20');
     await page.locator('#modal-app #sla-save').click();
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_sla_config_v1')).targets.Critical.response), 20);
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem((localStorage.getItem('tq_active_org_v1') ? 'tq_sla_config_v1__' + localStorage.getItem('tq_active_org_v1') : 'tq_sla_config_v1'))).targets.Critical.response), 20);
     await page.locator('#modal-app #sla-search').fill('near response deadline');
     assert.match(await page.locator('#modal-app #sla-list').innerText(), /Critical SLA near response deadline/);
     await page.locator('#modal-close').click();
@@ -253,7 +263,7 @@ const { chromium } = require('playwright');
     workspaceBackup.data.tickets.push({id:'backup-import-qa',title:'Restored backup QA',status:'Open',priority:'Normal',category:'Software',createdAt:new Date().toISOString()});
     await page.locator('#modal-app #tb-file').setInputFiles({name:'qa-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(workspaceBackup))});
     await page.waitForFunction(() => document.querySelector('#modal-app #tb-message')?.textContent.includes('Pemulihan berhasil'));
-    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets')).some(t => t.id === 'backup-import-qa')));
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem((localStorage.getItem('tq_active_org_v1') ? 'tq_tickets__' + localStorage.getItem('tq_active_org_v1') : 'tq_tickets'))).some(t => t.id === 'backup-import-qa')));
     await page.locator('#modal-close').click();
 
     // Audit Trail: tracks ticket status changes and asset changes; supports filtering/export.

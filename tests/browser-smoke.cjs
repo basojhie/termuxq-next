@@ -76,6 +76,16 @@ const { chromium } = require('playwright');
     assert.equal(workflowTicket.comments.length, 1);
     assert.equal(workflowTicket.comments[0].text, 'Membersihkan roller, uji cetak berhasil.');
     assert.ok(workflowTicket.statusHistory.some(entry => entry.to === 'Waiting' && entry.reason));
+    await page.locator('#modal-app select[data-status]').selectOption('Resolved');
+    const resolvedWorkflowTicket = await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0]);
+    assert.equal(resolvedWorkflowTicket.status, 'Resolved');
+    assert.ok(resolvedWorkflowTicket.resolvedAt, 'resolving a ticket should stamp resolvedAt');
+    await page.locator('#modal-app select[data-status]').selectOption('In Progress');
+    const reopenedWorkflowTicket = await page.evaluate(() => JSON.parse(localStorage.getItem('tq_tickets'))[0]);
+    assert.equal(reopenedWorkflowTicket.status, 'In Progress');
+    assert.equal(reopenedWorkflowTicket.resolvedAt, null);
+    assert.equal(reopenedWorkflowTicket.reopenCount, 1);
+    assert.ok(reopenedWorkflowTicket.statusHistory.some(entry => entry.from === 'Resolved' && entry.to === 'In Progress'));
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.locator('#modal-app #export').click()
@@ -249,6 +259,13 @@ const { chromium } = require('playwright');
     assert.ok(Number(await page.locator('#modal-app #slar-total').innerText()) >= 3);
     assert.ok(await page.locator('#modal-app #slar-response-rate').count());
     assert.match(await page.locator('#modal-app #slar-trend').innerText(), /B .*S/);
+    await page.locator('#modal-app #slar-range').selectOption('30');
+    assert.match(await page.locator('#modal-app #slar-trend-title').innerText(), /30 hari/);
+    assert.equal(await page.locator('#modal-app #slar-trend [data-slar-period]').count(), 30);
+    await page.locator('#modal-app #slar-range').selectOption('90');
+    assert.match(await page.locator('#modal-app #slar-trend-title').innerText(), /per minggu/);
+    assert.equal(await page.locator('#modal-app #slar-trend [data-slar-period]').count(), 13);
+    await page.locator('#modal-app #slar-range').selectOption('7');
     const [slaReportDownload] = await Promise.all([
       page.waitForEvent('download'),
       page.locator('#modal-app #slar-export').click()
@@ -325,7 +342,22 @@ const { chromium } = require('playwright');
     assert.match(checkText, /Cloud Sync \(Supabase\)/);
     assert.match(checkText, /Audit Trail \/ Activity Log/);
     assert.match(checkText, /SLA & Ticket Priority Monitoring/);
+    assert.match(checkText, /SLA Reporting & Analytics/);
+    assert.match(checkText, /Ticket Notification Center/);
+    assert.match(checkText, /Ticket Backup & Restore/);
+    assert.match(checkText, /Team Access & Roles/);
     assert.match(checkText, /HTTP Inspector/);
+
+    // Viewer role keeps ticket data readable but disables every ticket mutation control.
+    await page.locator('#modal-close').click();
+    await page.evaluate(() => localStorage.setItem('tq_active_org_role_v1', JSON.stringify('viewer')));
+    await page.locator('[data-module="tickets"]').click();
+    assert.equal(await page.locator('#modal-app #ticket-form button[type="submit"]').isDisabled(), true);
+    assert.equal(await page.locator('#modal-app #import').isDisabled(), true);
+    assert.equal(await page.locator('#modal-app [data-status]').first().isDisabled(), true);
+    assert.equal(await page.locator('#modal-app [data-response]').first().isDisabled(), true);
+    assert.equal(await page.locator('#modal-app [data-note]').first().isDisabled(), true);
+    await page.locator('#modal-close').click();
 
     assert.deepEqual(pageErrors, [], 'page should not emit uncaught JavaScript errors');
     console.log('PASS: dashboard, resource history, subnet, LAN validation, tickets with response/resolution timestamps, inventory, IT operations summary, cloud sync SDK flow, audit trail, SLA monitor, SHA-256, HTTP Inspector, and Project Health Check.');

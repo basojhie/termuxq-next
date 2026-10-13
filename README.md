@@ -181,3 +181,12 @@ GitHub Actions memeriksa sintaks antarmuka, interaksi browser, tabel/migrasi Sup
 
 ### Telegram hardening (server-side)
 Fungsi Telegram kini menerima hanya UID yang dicantumkan pada secret TELEGRAM_NOTIFY_ALLOWED_USER_IDS (beberapa UID dipisahkan koma). Selain sesi login yang valid, fungsi memakai pembatasan server atomik: minimal 60 detik antar-pengiriman serta maksimal 20 pengiriman per jam per UID. Tabel rate limit hanya dapat diakses role server. Jalankan schema/migration terbaru, lalu set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_NOTIFY_ALLOWED_USER_IDS, dan SUPABASE_SERVICE_ROLE_KEY sebagai Supabase Edge Function secrets. Jangan pernah mengirim service-role key ke browser atau menyimpannya di repository.
+
+
+## Workspace, anggota, dan role akses
+
+TermuxQ kini memiliki workspace Supabase dengan role yang ditegakkan oleh Row Level Security (RLS): admin mengelola anggota serta pengaturan SLA; technician membuat/mengubah tiket, aset, audit, dan melakukan sinkronisasi; viewer dapat membaca data tetapi tidak dapat menulis ke database. Undangan anggota dikirim lewat Supabase Edge Function team-admin yang memakai service-role key hanya di sisi server. Admin tidak dapat menghapus atau menurunkan role admin terakhir.
+
+Pada project Supabase lama, jalankan migrasi berurutan: supabase/migrations/20261013_ticket_workflow.sql lalu supabase/migrations/20261014_workspace_roles.sql. Migrasi kedua membuat workspace pribadi bagi pemilik record lama dan mempertahankan payload/tombstone dengan primary key per-workspace. Pada project baru, gunakan supabase/schema.sql. Deploy Edge Function dengan perintah supabase functions deploy team-admin. Secret SUPABASE_SERVICE_ROLE_KEY tetap di server, bukan di HTML atau browser. Undangan email memerlukan SMTP/Auth Supabase yang benar.
+
+Buka modul Team Access untuk membuat workspace, memilih workspace aktif, mengundang anggota berdasarkan email, mengubah role, atau menghapus anggota. Data lokal dipisahkan per workspace di browser; jalankan Cloud Sync setelah memilih workspace untuk mengunggah atau mengambil datanya.

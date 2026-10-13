@@ -100,7 +100,18 @@ jobs:
           # Security guidance may mention service_role safely; only fail if a key-like literal is assigned.
           if re.search(r"""(?:service_role|SERVICE_ROLE_KEY)\s*[:=]\s*['"][^'"]{20,}['"]""", frontend, flags=re.I):
               raise SystemExit("A service_role credential appears to be hard-coded")
-          print("Supabase record types and server-side Telegram auth/secret guardrails validated.")
+          team_path = Path("supabase/functions/team-admin/index.ts")
+          if not team_path.is_file():
+              raise SystemExit("Missing secure team-admin Edge Function")
+          team = team_path.read_text(encoding="utf-8")
+          for required in ["auth.getUser()", "termuxq_organization_members", "admin", "technician", "viewer", "inviteUserByEmail", "set_role"]:
+              if required not in team:
+                  raise SystemExit("Team access guardrail missing: " + required)
+          workspace_migration = Path("supabase/migrations/20261014_workspace_roles.sql").read_text(encoding="utf-8")
+          for required in ["termuxq_is_org_member", "termuxq_has_org_role", "record_type<>'setting'", "organization_id", "primary key"]:
+              if required.lower() not in workspace_migration.lower():
+                  raise SystemExit("Workspace RLS guardrail missing: " + required)
+          print("Supabase schema, workspace role enforcement, and server-side notifications validated.")
           PY
 
       - name: Install Playwright
